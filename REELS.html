@@ -1,0 +1,2960 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReelCraft — Video to Reels Converter</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            surface: {
+              950: '#09090b',
+              900: '#111116',
+              850: '#17171f',
+              800: '#1e1e28',
+              700: '#2a2a38',
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    /* Custom thin scrollbars & crisp range sliders */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #111116;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #2e2e3d;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #46465c;
+    }
+    input[type='range'] {
+      accent-color: #a855f7;
+    }
+  </style>
+</head>
+<body class="bg-surface-950 text-zinc-100 font-sans antialiased min-h-screen flex flex-col selection:bg-purple-500/30 selection:text-purple-200 overflow-x-hidden">
+
+  <!-- Offscreen Compositor-Active Source Video (avoids display:none decoder throttling) -->
+  <video id="sourceVideo" class="fixed top-0 left-0 w-px h-px opacity-0 pointer-events-none" playsinline preload="auto" crossorigin="anonymous"></video>
+  <input id="fileInput" type="file" accept="video/*" class="hidden" />
+
+  <!-- Top Navigation Header -->
+  <header class="sticky top-0 z-40 border-b border-zinc-800/80 bg-surface-950/85 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 via-fuchsia-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/25 shrink-0">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <rect x="6" y="2.5" width="12" height="19" rx="3" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 9.5l4 2.5-4 2.5v-5z" fill="currentColor" stroke="none" />
+          </svg>
+        </div>
+        <div class="truncate">
+          <h1 class="text-base sm:text-lg font-bold tracking-tight text-white leading-tight truncate">ReelCraft</h1>
+          <p class="text-[11px] text-zinc-400 leading-tight hidden sm:block">9:16 Video to Reels Studio • 100% In-Browser</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <button id="btnTryDemo" type="button"
+          class="px-3 py-2 rounded-xl text-xs sm:text-sm font-medium bg-surface-800 hover:bg-surface-700 text-zinc-200 border border-zinc-700/80 transition cursor-pointer">
+          Try Demo
+        </button>
+        <button id="btnHeaderUpload" type="button"
+          class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 text-white shadow-md shadow-purple-600/25 transition cursor-pointer">
+          Upload Video
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5 sm:py-6">
+
+    <!-- Empty State: Upload Dropzone -->
+    <section id="uploadSection" class="max-w-2xl mx-auto my-8 sm:my-16">
+      <div id="dropZone"
+        class="rounded-3xl border-2 border-dashed border-zinc-700/90 hover:border-purple-500/80 bg-surface-900/70 p-8 sm:p-14 text-center transition cursor-pointer group">
+        <div class="w-16 h-16 mx-auto mb-5 rounded-2xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center group-hover:scale-105 transition">
+          <svg class="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+          </svg>
+        </div>
+        <h2 class="text-xl sm:text-2xl font-bold text-white mb-2">Convert Any Video into a 9:16 Reel</h2>
+        <p class="text-sm text-zinc-400 max-w-md mx-auto mb-6">
+          Drag &amp; drop an MP4, MOV, or WebM video here. Reframe with Smart Crop or Blur Fill, add Zoom In/Out &amp; Faster scenes, trim precisely, and export in crisp 1080p MP4.
+        </p>
+        <div class="flex flex-wrap items-center justify-center gap-3">
+          <button id="btnSelectFile" type="button"
+            class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-500 hover:to-fuchsia-500 text-white shadow-lg shadow-purple-600/25 transition">
+            Choose Video File
+          </button>
+          <button id="btnStartDemoHero" type="button"
+            class="px-5 py-2.5 rounded-xl text-sm font-medium bg-surface-800 hover:bg-surface-700 text-zinc-200 border border-zinc-700 transition">
+            Launch Demo Clip
+          </button>
+        </div>
+        <p class="text-[11px] text-zinc-500 mt-5">Private &amp; local — your video never leaves your browser.</p>
+      </div>
+    </section>
+
+    <!-- Active Editor Workspace -->
+    <section id="editorSection" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- Left Column: 9:16 Stage + Interactive Visual Timeline + Scene Keyframes -->
+      <div class="lg:col-span-7 flex flex-col gap-4">
+
+        <!-- Stage Top Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-2 bg-surface-900 border border-zinc-800/80 rounded-2xl px-4 py-2.5">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+            <span id="sourceInfoBadge" class="text-xs font-mono text-zinc-300 truncate">Ready</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btnGridToggle" type="button" title="Toggle Rule of Thirds Grid"
+              class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition flex items-center gap-1.5">
+              <span id="gridDot" class="w-2 h-2 rounded-full bg-zinc-500"></span>
+              <span>Grid</span>
+            </button>
+            <button id="btnResetFraming" type="button" title="Reset Zoom, Pan & Speed"
+              class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition">
+              Reset View
+            </button>
+            <button id="btnSafeZone" type="button"
+              class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 transition flex items-center gap-1.5">
+              <span id="safeZoneDot" class="w-2 h-2 rounded-full bg-zinc-500"></span>
+              <span>Safe Zones</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 9:16 Phone Preview Frame -->
+        <div class="bg-surface-900 border border-zinc-800/80 rounded-3xl p-4 sm:p-5 flex items-center justify-center">
+          <div id="previewWrapper" class="relative w-full max-w-[300px] sm:max-w-[330px] aspect-[9/16] rounded-[2rem] bg-black p-2 shadow-2xl shadow-black/70 border border-zinc-700/70">
+            <canvas id="previewCanvas"
+              class="w-full h-full rounded-[1.5rem] block cursor-grab active:cursor-grabbing touch-none bg-black"></canvas>
+
+            <!-- Safe Zone Overlay (Not Exported) -->
+            <div id="safeZoneOverlay" class="hidden pointer-events-none absolute inset-2 rounded-[1.5rem] overflow-hidden">
+              <!-- Top safe margin -->
+              <div class="absolute top-0 inset-x-0 h-[12%] bg-red-500/15 border-b border-dashed border-red-400/70 flex items-center justify-center">
+                <span class="text-[9px] font-semibold uppercase tracking-wider text-red-200 bg-black/50 px-1.5 py-0.5 rounded">Top UI Zone</span>
+              </div>
+              <!-- Right action buttons zone -->
+              <div class="absolute right-0 bottom-[18%] w-[18%] h-[38%] bg-amber-500/15 border-l border-y border-dashed border-amber-400/70 flex flex-col items-center justify-around py-2">
+                <span class="w-5 h-5 rounded-full border border-white/60"></span>
+                <span class="w-5 h-5 rounded-full border border-white/60"></span>
+                <span class="w-5 h-5 rounded-full border border-white/60"></span>
+              </div>
+              <!-- Bottom caption/audio zone -->
+              <div class="absolute bottom-0 inset-x-0 h-[18%] bg-red-500/15 border-t border-dashed border-red-400/70 flex items-center justify-center">
+                <span class="text-[9px] font-semibold uppercase tracking-wider text-red-200 bg-black/50 px-1.5 py-0.5 rounded">Bottom Reels / TikTok UI</span>
+              </div>
+            </div>
+
+            <!-- Rule of Thirds Alignment Grid (Not Exported) -->
+            <div id="gridOverlay" class="hidden pointer-events-none absolute inset-2 rounded-[1.5rem] overflow-hidden">
+              <div class="absolute inset-y-0 left-1/3 w-px bg-white/25"></div>
+              <div class="absolute inset-y-0 left-2/3 w-px bg-white/25"></div>
+              <div class="absolute inset-x-0 top-1/3 h-px bg-white/25"></div>
+              <div class="absolute inset-x-0 top-2/3 h-px bg-white/25"></div>
+              <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full border border-purple-400/80"></div>
+            </div>
+
+            <!-- Live Framing HUD Badge -->
+            <div id="liveHudBadge"
+              class="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-full bg-black/65 backdrop-blur-md text-[10px] font-mono text-zinc-200 border border-white/10 whitespace-nowrap">
+              100% • 1×
+            </div>
+
+            <!-- Drag hint pill -->
+            <div id="dragHint"
+              class="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-sm text-[10px] font-medium text-zinc-200 border border-white/10 opacity-85 transition-opacity">
+              Drag to pan • Scroll to zoom
+            </div>
+          </div>
+        </div>
+
+        <!-- Playback, Interactive Timeline & Scene Keyframes Card -->
+        <div id="timelineSection" class="bg-surface-900 border border-zinc-800/80 rounded-2xl p-4 flex flex-col gap-3.5">
+
+          <!-- Playback Controls + Interactive Visual Timeline -->
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button id="btnPlayPause" type="button" title="Play / Pause (Space)"
+                class="w-10 h-10 rounded-xl bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center shadow-md shadow-purple-600/25 transition">
+                <svg id="iconPlay" class="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+                <svg id="iconPause" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 5h4v14H6zm8 0h4v14h-4z" />
+                </svg>
+              </button>
+              <button id="btnMute" type="button" title="Mute / Unmute"
+                class="w-9 h-10 rounded-xl bg-surface-800 hover:bg-surface-700 text-zinc-300 border border-zinc-700/70 flex items-center justify-center transition">
+                <svg id="iconVolOn" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H3v6h3l5 4V5zM15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14" />
+                </svg>
+                <svg id="iconVolOff" class="w-4 h-4 hidden text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H3v6h3l5 4V5zM23 9l-6 6M17 9l6 6" />
+                </svg>
+              </button>
+            </div>
+
+            <div class="flex-1 flex flex-col gap-1.5 min-w-0">
+              <!-- Interactive Visual Timeline Track with Draggable Trim Handles -->
+              <div id="visualTimeline"
+                class="relative w-full h-11 rounded-xl bg-zinc-950 border border-zinc-800 select-none touch-none cursor-pointer overflow-visible">
+                <!-- Dimmed Trimmed-Out Regions -->
+                <div id="trimOutLeft" class="absolute top-0 bottom-0 left-0 bg-black/70 rounded-l-xl pointer-events-none" style="width: 0%;"></div>
+                <div id="trimOutRight" class="absolute top-0 bottom-0 right-0 bg-black/70 rounded-r-xl pointer-events-none" style="width: 0%;"></div>
+
+                <!-- Active Clip Window -->
+                <div id="trimHighlightBar"
+                  class="absolute top-0 bottom-0 bg-gradient-to-r from-purple-600/25 via-fuchsia-500/20 to-purple-600/25 border-y-2 border-purple-500/80 pointer-events-none"
+                  style="left: 0%; width: 100%;"></div>
+
+                <!-- Draggable Left Trim Handle -->
+                <div id="trimHandleLeft" title="Drag to adjust Trim Start"
+                  class="absolute top-0 bottom-0 w-3.5 -ml-1.5 rounded-l-md bg-purple-500 hover:bg-purple-400 border border-white/60 cursor-ew-resize z-30 flex items-center justify-center shadow-md"
+                  style="left: 0%;">
+                  <span class="w-0.5 h-4 bg-white/90 rounded-full"></span>
+                </div>
+
+                <!-- Draggable Right Trim Handle -->
+                <div id="trimHandleRight" title="Drag to adjust Trim End"
+                  class="absolute top-0 bottom-0 w-3.5 -ml-2 rounded-r-md bg-purple-500 hover:bg-purple-400 border border-white/60 cursor-ew-resize z-30 flex items-center justify-center shadow-md"
+                  style="left: 100%;">
+                  <span class="w-0.5 h-4 bg-white/90 rounded-full"></span>
+                </div>
+
+                <!-- Clickable Scene Diamond Markers Track -->
+                <div id="sceneMarkersTrack" class="absolute inset-x-0 top-0 bottom-0 pointer-events-none z-20"></div>
+
+                <!-- Playhead Needle -->
+                <div id="playheadNeedle" class="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_8px_rgba(255,255,255,0.9)] pointer-events-none z-20" style="left: 0%;">
+                  <div class="w-2.5 h-2.5 -ml-1 -mt-1 rounded-full bg-white border-2 border-purple-500"></div>
+                </div>
+
+                <!-- Hidden fallback range for keyboard accessibility -->
+                <input id="seekSlider" type="range" min="0" max="100" step="0.05" value="0" class="sr-only" />
+              </div>
+
+              <div class="flex justify-between text-[11px] font-mono text-zinc-400">
+                <span id="currentTimeDisplay">00:00.0</span>
+                <span id="clipLengthDisplay" class="text-purple-300 font-semibold">Clip: 00:00.0</span>
+                <span id="totalTimeDisplay">00:00.0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Precision Editing Toolbar (Frame Step, Set In/Out, Undo/Redo) -->
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <div class="flex items-center gap-1 flex-wrap">
+              <button id="btnStepBack" type="button" title="Step back 0.1s (Left Arrow)"
+                class="px-2 py-1 rounded-lg text-[11px] font-mono bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/70 transition">-0.1s</button>
+              <button id="btnStepForward" type="button" title="Step forward 0.1s (Right Arrow)"
+                class="px-2 py-1 rounded-lg text-[11px] font-mono bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/70 transition">+0.1s</button>
+              <button id="btnSetTrimIn" type="button" title="Set Trim Start at Playhead (I)"
+                class="px-2 py-1 rounded-lg text-[11px] font-medium bg-zinc-800 hover:bg-purple-600/30 hover:border-purple-500/60 text-zinc-200 border border-zinc-700/70 transition">Set In [</button>
+              <button id="btnSetTrimOut" type="button" title="Set Trim End at Playhead (O)"
+                class="px-2 py-1 rounded-lg text-[11px] font-medium bg-zinc-800 hover:bg-purple-600/30 hover:border-purple-500/60 text-zinc-200 border border-zinc-700/70 transition">Set Out ]</button>
+            </div>
+            <div class="flex items-center gap-1">
+              <button id="btnUndo" type="button" disabled title="Undo (Ctrl+Z)"
+                class="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-zinc-800 hover:bg-zinc-700 disabled:opacity-35 disabled:cursor-not-allowed text-zinc-200 border border-zinc-700/70 transition">Undo</button>
+              <button id="btnRedo" type="button" disabled title="Redo (Ctrl+Y)"
+                class="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-zinc-800 hover:bg-zinc-700 disabled:opacity-35 disabled:cursor-not-allowed text-zinc-200 border border-zinc-700/70 transition">Redo</button>
+            </div>
+          </div>
+
+          <!-- Timeline Scene Adjustments Controls -->
+          <div class="border-t border-zinc-800/80 pt-3 flex flex-col gap-2.5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold text-zinc-200">Timeline Scenes</span>
+                <span id="sceneCountBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-zinc-800 text-zinc-400">0 scenes</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button id="btnToggleSceneTransition" type="button" title="Toggle Smooth Motion vs Instant Cut"
+                  class="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-surface-800 hover:bg-surface-700 text-purple-300 border border-purple-500/30 transition">
+                  <span id="sceneTransitionLabel">Smooth Motion</span>
+                </button>
+                <button id="btnClearScenes" type="button"
+                  class="hidden px-2 py-1 rounded-lg text-[11px] font-medium bg-zinc-800 hover:bg-rose-500/20 hover:text-rose-300 text-zinc-400 transition">
+                  Clear All
+                </button>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button id="btnAddScene" type="button"
+                class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-600/90 hover:bg-purple-500 text-white shadow-sm transition">
+                + Add Scene @ 00:00.0
+              </button>
+              <button id="btnQuickZoomIn" type="button"
+                class="px-2.5 py-1.5 rounded-xl text-xs font-medium bg-surface-800 hover:bg-purple-500/20 hover:border-purple-500/60 text-zinc-200 border border-zinc-700/80 transition">
+                Zoom In Scene
+              </button>
+              <button id="btnQuickZoomOut" type="button"
+                class="px-2.5 py-1.5 rounded-xl text-xs font-medium bg-surface-800 hover:bg-purple-500/20 hover:border-purple-500/60 text-zinc-200 border border-zinc-700/80 transition">
+                Zoom Out Scene
+              </button>
+              <button id="btnQuickFast" type="button"
+                class="px-2.5 py-1.5 rounded-xl text-xs font-medium bg-surface-800 hover:bg-amber-500/20 hover:border-amber-500/60 text-amber-200 border border-zinc-700/80 transition">
+                Faster Scene (2×)
+              </button>
+            </div>
+
+            <!-- Saved Scene Chips -->
+            <div id="scenesList" class="flex flex-wrap gap-1.5">
+              <p class="text-[11px] text-zinc-500">Scrub the timeline, reframe or pick a quick scene button to animate Zoom, Pan, Mode, or Speed.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Tabbed Studio Controls -->
+      <div class="lg:col-span-5 bg-surface-900 border border-zinc-800/80 rounded-3xl overflow-hidden flex flex-col">
+
+        <!-- Tabs Header -->
+        <div class="grid grid-cols-3 border-b border-zinc-800/80 bg-surface-950/50 p-1.5 gap-1">
+          <button type="button" data-tab="frame"
+            class="tab-btn py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition bg-surface-800 text-white shadow-sm">
+            Frame &amp; Trim
+          </button>
+          <button type="button" data-tab="style"
+            class="tab-btn py-2.5 rounded-xl text-xs sm:text-sm font-medium transition text-zinc-400 hover:text-zinc-200">
+            Captions &amp; Look
+          </button>
+          <button type="button" data-tab="export"
+            class="tab-btn py-2.5 rounded-xl text-xs sm:text-sm font-medium transition text-zinc-400 hover:text-zinc-200">
+            Export Reel
+          </button>
+        </div>
+
+        <!-- TAB 1: FRAME & TRIM -->
+        <div id="tab-frame" class="tab-panel p-5 flex flex-col gap-5">
+          <!-- Conversion Mode -->
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Vertical Layout Mode</label>
+            <div class="grid grid-cols-3 gap-2">
+              <button type="button" data-mode="crop"
+                class="mode-btn p-2.5 rounded-xl border text-center transition border-purple-500 bg-purple-500/15 text-white">
+                <div class="text-xs font-semibold">Smart Crop</div>
+                <div class="text-[10px] text-zinc-400 mt-0.5">Full 9:16 fill</div>
+              </button>
+              <button type="button" data-mode="blur"
+                class="mode-btn p-2.5 rounded-xl border text-center transition border-zinc-800 bg-surface-850 text-zinc-300 hover:border-zinc-700">
+                <div class="text-xs font-semibold">Blur Fill</div>
+                <div class="text-[10px] text-zinc-400 mt-0.5">Full frame + blur</div>
+              </button>
+              <button type="button" data-mode="gradient"
+                class="mode-btn p-2.5 rounded-xl border text-center transition border-zinc-800 bg-surface-850 text-zinc-300 hover:border-zinc-700">
+                <div class="text-xs font-semibold">Backdrop</div>
+                <div class="text-[10px] text-zinc-400 mt-0.5">Styled frame</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Framing Sliders -->
+          <div class="space-y-3.5 bg-surface-950/60 border border-zinc-800/70 rounded-2xl p-4">
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-zinc-300 font-medium">Zoom</span>
+                <span id="zoomValue" class="font-mono text-purple-300">100%</span>
+              </div>
+              <input id="zoomSlider" type="range" min="100" max="250" step="1" value="100" class="w-full" />
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-zinc-300 font-medium">Horizontal Pan (X)</span>
+                <span id="panXValue" class="font-mono text-zinc-300">0%</span>
+              </div>
+              <input id="panXSlider" type="range" min="-100" max="100" step="0.5" value="0" class="w-full" />
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-zinc-300 font-medium">Vertical Pan (Y)</span>
+                <span id="panYValue" class="font-mono text-zinc-300">0%</span>
+              </div>
+              <input id="panYSlider" type="range" min="-100" max="100" step="0.5" value="0" class="w-full" />
+            </div>
+
+            <div class="pt-1 border-t border-zinc-800/70 flex items-center justify-between gap-3">
+              <label for="speedSelect" class="text-xs font-medium text-zinc-300">Playback / Scene Speed</label>
+              <select id="speedSelect"
+                class="rounded-xl bg-surface-800 border border-zinc-700 px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-purple-500">
+                <option value="0.5">0.5× (Slow)</option>
+                <option value="0.75">0.75×</option>
+                <option value="1" selected>1× (Normal)</option>
+                <option value="1.25">1.25×</option>
+                <option value="1.5">1.5× (Fast)</option>
+                <option value="2">2× (Faster)</option>
+                <option value="3">3× (Hyper)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Blur Fill Specific Options -->
+          <div id="blurOptions" class="hidden space-y-3 bg-surface-950/60 border border-zinc-800/70 rounded-2xl p-4">
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-zinc-300 font-medium">Background Blur</span>
+                <span id="blurStrengthValue" class="font-mono text-purple-300">24px</span>
+              </div>
+              <input id="blurStrengthSlider" type="range" min="6" max="50" step="2" value="24" class="w-full" />
+            </div>
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-zinc-300 font-medium">Video Corner Radius</span>
+                <span id="cornerRadiusBlurValue" class="font-mono text-zinc-300">12px</span>
+              </div>
+              <input id="cornerRadiusBlurSlider" type="range" min="0" max="40" step="2" value="12" class="w-full" />
+            </div>
+          </div>
+
+          <!-- Gradient Backdrop Specific Options -->
+          <div id="gradientOptions" class="hidden space-y-3 bg-surface-950/60 border border-zinc-800/70 rounded-2xl p-4">
+            <div>
+              <span class="block text-xs font-medium text-zinc-300 mb-2">Backdrop Theme</span>
+              <div class="grid grid-cols-5 gap-2">
+                <button type="button" data-bg="linear-1" class="bg-preset-btn h-8 rounded-lg ring-2 ring-white bg-gradient-to-br from-purple-700 via-fuchsia-700 to-indigo-900"></button>
+                <button type="button" data-bg="linear-2" class="bg-preset-btn h-8 rounded-lg ring-1 ring-zinc-700 bg-gradient-to-br from-orange-500 via-rose-600 to-purple-900"></button>
+                <button type="button" data-bg="linear-3" class="bg-preset-btn h-8 rounded-lg ring-1 ring-zinc-700 bg-gradient-to-br from-cyan-500 via-blue-700 to-slate-900"></button>
+                <button type="button" data-bg="linear-4" class="bg-preset-btn h-8 rounded-lg ring-1 ring-zinc-700 bg-gradient-to-br from-emerald-500 via-teal-700 to-zinc-900"></button>
+                <button type="button" data-bg="solid-dark" class="bg-preset-btn h-8 rounded-lg ring-1 ring-zinc-700 bg-zinc-900"></button>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-zinc-300 font-medium">Frame Padding</span>
+                <span id="framePaddingValue" class="font-mono text-purple-300">24px</span>
+              </div>
+              <input id="framePaddingSlider" type="range" min="0" max="64" step="2" value="24" class="w-full" />
+            </div>
+          </div>
+
+          <!-- Trim Controls -->
+          <div class="space-y-3 bg-surface-950/60 border border-zinc-800/70 rounded-2xl p-4">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Trim Clip</span>
+              <div class="flex items-center gap-1">
+                <button type="button" data-preset-sec="15" class="trim-preset-btn px-2 py-0.5 rounded-md text-[10px] font-mono bg-zinc-800 hover:bg-zinc-700 text-zinc-300">15s</button>
+                <button type="button" data-preset-sec="30" class="trim-preset-btn px-2 py-0.5 rounded-md text-[10px] font-mono bg-zinc-800 hover:bg-zinc-700 text-zinc-300">30s</button>
+                <button type="button" data-preset-sec="60" class="trim-preset-btn px-2 py-0.5 rounded-md text-[10px] font-mono bg-zinc-800 hover:bg-zinc-700 text-zinc-300">60s</button>
+                <button type="button" data-preset-sec="full" class="trim-preset-btn px-2 py-0.5 rounded-md text-[10px] font-mono bg-zinc-800 hover:bg-zinc-700 text-zinc-300">Full</button>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-zinc-400">Start Time</span>
+                <span id="trimStartLabel" class="font-mono text-zinc-200">00:00.0</span>
+              </div>
+              <input id="trimStartSlider" type="range" min="0" max="10" step="0.1" value="0" class="w-full" />
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-zinc-400">End Time</span>
+                <span id="trimEndLabel" class="font-mono text-zinc-200">00:10.0</span>
+              </div>
+              <input id="trimEndSlider" type="range" min="0" max="10" step="0.1" value="10" class="w-full" />
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: CAPTIONS & LOOK -->
+        <div id="tab-style" class="tab-panel hidden p-5 flex flex-col gap-5">
+          <!-- Hook Caption -->
+          <div class="space-y-3 bg-surface-950/60 border border-zinc-800/70 rounded-2xl p-4">
+            <label for="captionInput" class="block text-xs font-semibold uppercase tracking-wider text-zinc-400">Hook Caption Overlay</label>
+            <input id="captionInput" type="text" maxlength="80" placeholder="e.g. Wait for the end..."
+              class="w-full rounded-xl bg-surface-800 border border-zinc-700 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500" />
+
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" data-capstyle="white-pill"
+                class="capstyle-btn py-2 px-2.5 rounded-xl text-xs font-semibold border border-purple-500 bg-purple-500/15 text-white">White Pill</button>
+              <button type="button" data-capstyle="dark-glass"
+                class="capstyle-btn py-2 px-2.5 rounded-xl text-xs font-medium border border-zinc-800 bg-surface-850 text-zinc-300">Dark Glass</button>
+              <button type="button" data-capstyle="neon-purple"
+                class="capstyle-btn py-2 px-2.5 rounded-xl text-xs font-medium border border-zinc-800 bg-surface-850 text-zinc-300">Neon Purple</button>
+              <button type="button" data-capstyle="bold-outline"
+                class="capstyle-btn py-2 px-2.5 rounded-xl text-xs font-medium border border-zinc-800 bg-surface-850 text-zinc-300">Bold Outline</button>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 pt-1">
+              <button type="button" data-cappos="top"
+                class="cappos-btn py-1.5 rounded-lg text-xs font-semibold border border-purple-500 bg-purple-500/15 text-white">Top</button>
+              <button type="button" data-cappos="center"
+                class="cappos-btn py-1.5 rounded-lg text-xs font-medium border border-zinc-800 bg-surface-850 text-zinc-300">Center</button>
+              <button type="button" data-cappos="bottom"
+                class="cappos-btn py-1.5 rounded-lg text-xs font-medium border border-zinc-800 bg-surface-850 text-zinc-300">Bottom</button>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-zinc-300">Caption Size</span>
+                <span id="captionSizeValue" class="font-mono text-purple-300">28px</span>
+              </div>
+              <input id="captionSizeSlider" type="range" min="16" max="44" step="1" value="28" class="w-full" />
+            </div>
+          </div>
+
+          <!-- Color Grading & Filters -->
+          <div class="space-y-3 bg-surface-950/60 border border-zinc-800/70 rounded-2xl p-4">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Color Filter</span>
+              <button id="btnResetColor" type="button" class="text-[11px] text-purple-400 hover:text-purple-300">Reset</button>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <button type="button" data-filter="none" class="filter-btn py-2 rounded-xl text-xs font-semibold border border-purple-500 bg-purple-500/15 text-white">Original</button>
+              <button type="button" data-filter="vivid" class="filter-btn py-2 rounded-xl text-xs font-medium border border-zinc-800 bg-surface-850 text-zinc-300">Vivid</button>
+              <button type="button" data-filter="cinema" class="filter-btn py-2 rounded-xl text-xs font-medium border border-zinc-800 bg-surface-850 text-zinc-300">Cinema</button>
+              <button type="button" data-filter="warm" class="filter-btn py-2 rounded-xl text-xs font-medium border border-zinc-800 bg-surface-850 text-zinc-300">Warm</button>
+              <button type="button" data-filter="cool" class="filter-btn py-2 rounded-xl text-xs font-medium border border-zinc-800 bg-surface-850 text-zinc-300">Cool</button>
+              <button type="button" data-filter="bw" class="filter-btn py-2 rounded-xl text-xs font-medium border border-zinc-800 bg-surface-850 text-zinc-300">B&amp;W</button>
+            </div>
+
+            <div class="space-y-2.5 pt-1">
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-zinc-300">Brightness</span>
+                  <span id="brightnessValue" class="font-mono text-zinc-300">100%</span>
+                </div>
+                <input id="brightnessSlider" type="range" min="60" max="150" step="1" value="100" class="w-full" />
+              </div>
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-zinc-300">Contrast</span>
+                  <span id="contrastValue" class="font-mono text-zinc-300">100%</span>
+                </div>
+                <input id="contrastSlider" type="range" min="60" max="160" step="1" value="100" class="w-full" />
+              </div>
+              <div>
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-zinc-300">Saturation</span>
+                  <span id="saturationValue" class="font-mono text-zinc-300">100%</span>
+                </div>
+                <input id="saturationSlider" type="range" min="0" max="200" step="1" value="100" class="w-full" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: EXPORT REEL -->
+        <div id="tab-export" class="tab-panel hidden p-5 flex flex-col gap-4">
+          <div class="space-y-3.5 bg-surface-950/60 border border-zinc-800/70 rounded-2xl p-4">
+            <div>
+              <label for="resolutionSelect" class="block text-xs font-medium text-zinc-300 mb-1.5">Resolution (9:16)</label>
+              <select id="resolutionSelect"
+                class="w-full rounded-xl bg-surface-800 border border-zinc-700 px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500">
+                <option value="1080x1920" selected>1080p Full HD (1080 × 1920 — Sharpest Reels)</option>
+                <option value="720x1280">720p HD (720 × 1280 — Fast Export)</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="formatSelect" class="block text-xs font-medium text-zinc-300 mb-1.5">Video Format</label>
+                <select id="formatSelect"
+                  class="w-full rounded-xl bg-surface-800 border border-zinc-700 px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500">
+                  <option value="mp4" selected>MP4 (.mp4)</option>
+                  <option value="webm">WebM (.webm)</option>
+                </select>
+              </div>
+              <div>
+                <label for="fpsSelect" class="block text-xs font-medium text-zinc-300 mb-1.5">Frame Rate</label>
+                <select id="fpsSelect"
+                  class="w-full rounded-xl bg-surface-800 border border-zinc-700 px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500">
+                  <option value="30" selected>30 FPS (Standard)</option>
+                  <option value="60">60 FPS (Ultra Smooth)</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label for="qualitySelect" class="block text-xs font-medium text-zinc-300 mb-1.5">Export Quality (Bitrate)</label>
+              <select id="qualitySelect"
+                class="w-full rounded-xl bg-surface-800 border border-zinc-700 px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500">
+                <option value="standard">Standard (8–10 Mbps • Compact)</option>
+                <option value="high" selected>High (12–16 Mbps • Crisp Social HD)</option>
+                <option value="ultra">Ultra (18–24 Mbps • Studio Master)</option>
+              </select>
+            </div>
+
+            <label class="flex items-center justify-between pt-1 cursor-pointer">
+              <span class="text-xs font-medium text-zinc-300">Include Original Audio</span>
+              <input id="includeAudioCheckbox" type="checkbox" checked class="w-4 h-4 rounded accent-purple-500" />
+            </label>
+
+            <p id="formatSupportHint" class="text-[11px] text-zinc-400 bg-surface-900/90 border border-zinc-800 rounded-xl px-3 py-2"></p>
+          </div>
+
+          <button id="btnExportReel" type="button"
+            class="w-full py-3.5 rounded-2xl text-sm font-bold bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 hover:from-purple-500 hover:via-fuchsia-500 hover:to-pink-500 text-white shadow-lg shadow-purple-600/25 transition disabled:opacity-50 disabled:cursor-not-allowed">
+            Export 9:16 Reel
+          </button>
+
+          <!-- Live Render Progress Box -->
+          <div id="exportProgressBox" class="hidden bg-surface-950 border border-purple-500/40 rounded-2xl p-4 space-y-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <span id="exportStatusText" class="text-xs font-semibold text-white truncate">Rendering...</span>
+              <span id="exportPercentText" class="text-xs font-mono font-bold text-purple-300">0%</span>
+            </div>
+            <div class="w-full h-2.5 rounded-full bg-zinc-800 overflow-hidden">
+              <div id="exportProgressBar" class="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-150" style="width: 0%;"></div>
+            </div>
+            <div class="flex items-center justify-between text-[11px] font-mono text-zinc-400">
+              <span id="exportTimeRemaining">0.0s / 0.0s</span>
+              <span id="exportRenderStats">Initializing...</span>
+            </div>
+            <button id="btnCancelExport" type="button"
+              class="w-full py-2 rounded-xl text-xs font-semibold bg-zinc-800 hover:bg-rose-500/20 hover:text-rose-300 text-zinc-300 transition">
+              Cancel Export
+            </button>
+          </div>
+
+          <!-- Export Complete Card -->
+          <div id="exportResultBox" class="hidden bg-emerald-500/10 border border-emerald-500/35 rounded-2xl p-4 space-y-3">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <h3 class="text-sm font-bold text-emerald-300">Reel Ready to Download!</h3>
+                <p id="exportResultMeta" class="text-xs text-zinc-300 mt-0.5"></p>
+              </div>
+              <span class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0">✓</span>
+            </div>
+            <a id="btnDownloadReel" href="#" download="reelcraft-1080p.mp4"
+              class="block w-full text-center py-2.5 rounded-xl text-sm font-bold bg-emerald-500 hover:bg-emerald-400 text-zinc-950 transition">
+              Download Video
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-xs w-full pointer-events-none"></div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // =======================================================================
+      // 1. STATE & PRESETS
+      // =======================================================================
+      const BG_PRESETS = {
+        'linear-1': ['#6d28d9', '#a21caf', '#1e1b4b'],
+        'linear-2': ['#f97316', '#e11d48', '#3b0764'],
+        'linear-3': ['#06b6d4', '#1d4ed8', '#0f172a'],
+        'linear-4': ['#10b981', '#0f766e', '#18181b'],
+        'solid-dark': ['#111116', '#18181f', '#09090b'],
+      };
+
+      const FILTER_PRESETS = {
+        none: { brightness: 100, contrast: 100, saturation: 100, extra: '' },
+        vivid: { brightness: 105, contrast: 115, saturation: 135, extra: '' },
+        cinema: { brightness: 96, contrast: 120, saturation: 88, extra: 'sepia(12%)' },
+        warm: { brightness: 104, contrast: 105, saturation: 118, extra: 'sepia(22%)' },
+        cool: { brightness: 100, contrast: 108, saturation: 110, extra: 'hue-rotate(12deg)' },
+        bw: { brightness: 102, contrast: 122, saturation: 0, extra: '' },
+      };
+
+      const state = {
+        hasSource: false,
+        sourceType: null, // 'file' | 'demo'
+        sourceFile: null,
+        fileName: 'reelcraft-video',
+        duration: 12,
+        currentTime: 0,
+        isPlaying: false,
+        isMuted: false,
+
+        // Trim
+        trimStart: 0,
+        trimEnd: 12,
+
+        // Framing & Speed
+        mode: 'crop', // 'crop' | 'blur' | 'gradient'
+        zoom: 1.0,
+        panX: 0,
+        panY: 0,
+        speed: 1.0,
+        blurStrength: 24,
+        cornerRadius: 12,
+        framePadding: 24,
+        bgPreset: 'linear-1',
+
+        // Captions & Color
+        captionText: '',
+        captionStyle: 'white-pill',
+        captionPos: 'top',
+        captionSize: 28,
+        filterPreset: 'none',
+        brightness: 100,
+        contrast: 100,
+        saturation: 100,
+
+        // UI & Export
+        showSafeZones: false,
+        showGrid: false,
+        isDraggingCanvas: false,
+        isExporting: false,
+        exportCancelled: false,
+        exportedUrl: null,
+        objectUrl: null,
+
+        // Timeline Scene Adjustments (Keyframes)
+        scenes: [], // Array of { id, time, mode, zoom, panX, panY, speed, tag }
+        sceneTransition: 'smooth', // 'smooth' | 'cut'
+
+        // Undo / Redo History
+        history: [],
+        historyIndex: -1,
+      };
+
+      // =======================================================================
+      // 2. DOM REFERENCES
+      // =======================================================================
+      const el = {
+        sourceVideo: document.getElementById('sourceVideo'),
+        fileInput: document.getElementById('fileInput'),
+        uploadSection: document.getElementById('uploadSection'),
+        editorSection: document.getElementById('editorSection'),
+        dropZone: document.getElementById('dropZone'),
+        btnSelectFile: document.getElementById('btnSelectFile'),
+        btnHeaderUpload: document.getElementById('btnHeaderUpload'),
+        btnTryDemo: document.getElementById('btnTryDemo'),
+        btnStartDemoHero: document.getElementById('btnStartDemoHero'),
+
+        // Preview Stage
+        sourceInfoBadge: document.getElementById('sourceInfoBadge'),
+        previewWrapper: document.getElementById('previewWrapper'),
+        previewCanvas: document.getElementById('previewCanvas'),
+        safeZoneOverlay: document.getElementById('safeZoneOverlay'),
+        safeZoneDot: document.getElementById('safeZoneDot'),
+        btnSafeZone: document.getElementById('btnSafeZone'),
+        gridOverlay: document.getElementById('gridOverlay'),
+        gridDot: document.getElementById('gridDot'),
+        btnGridToggle: document.getElementById('btnGridToggle'),
+        liveHudBadge: document.getElementById('liveHudBadge'),
+        btnResetFraming: document.getElementById('btnResetFraming'),
+        dragHint: document.getElementById('dragHint'),
+
+        // Playback, Timeline & Precision Bar
+        btnPlayPause: document.getElementById('btnPlayPause'),
+        iconPlay: document.getElementById('iconPlay'),
+        iconPause: document.getElementById('iconPause'),
+        btnMute: document.getElementById('btnMute'),
+        iconVolOn: document.getElementById('iconVolOn'),
+        iconVolOff: document.getElementById('iconVolOff'),
+        visualTimeline: document.getElementById('visualTimeline'),
+        trimOutLeft: document.getElementById('trimOutLeft'),
+        trimOutRight: document.getElementById('trimOutRight'),
+        trimHighlightBar: document.getElementById('trimHighlightBar'),
+        trimHandleLeft: document.getElementById('trimHandleLeft'),
+        trimHandleRight: document.getElementById('trimHandleRight'),
+        sceneMarkersTrack: document.getElementById('sceneMarkersTrack'),
+        playheadNeedle: document.getElementById('playheadNeedle'),
+        seekSlider: document.getElementById('seekSlider'),
+        currentTimeDisplay: document.getElementById('currentTimeDisplay'),
+        clipLengthDisplay: document.getElementById('clipLengthDisplay'),
+        totalTimeDisplay: document.getElementById('totalTimeDisplay'),
+        btnStepBack: document.getElementById('btnStepBack'),
+        btnStepForward: document.getElementById('btnStepForward'),
+        btnSetTrimIn: document.getElementById('btnSetTrimIn'),
+        btnSetTrimOut: document.getElementById('btnSetTrimOut'),
+        btnUndo: document.getElementById('btnUndo'),
+        btnRedo: document.getElementById('btnRedo'),
+
+        // Timeline Scenes
+        sceneCountBadge: document.getElementById('sceneCountBadge'),
+        btnToggleSceneTransition: document.getElementById('btnToggleSceneTransition'),
+        sceneTransitionLabel: document.getElementById('sceneTransitionLabel'),
+        btnClearScenes: document.getElementById('btnClearScenes'),
+        btnAddScene: document.getElementById('btnAddScene'),
+        btnQuickZoomIn: document.getElementById('btnQuickZoomIn'),
+        btnQuickZoomOut: document.getElementById('btnQuickZoomOut'),
+        btnQuickFast: document.getElementById('btnQuickFast'),
+        scenesList: document.getElementById('scenesList'),
+
+        // Frame & Trim Tab
+        zoomSlider: document.getElementById('zoomSlider'),
+        zoomValue: document.getElementById('zoomValue'),
+        panXSlider: document.getElementById('panXSlider'),
+        panXValue: document.getElementById('panXValue'),
+        panYSlider: document.getElementById('panYSlider'),
+        panYValue: document.getElementById('panYValue'),
+        speedSelect: document.getElementById('speedSelect'),
+        blurOptions: document.getElementById('blurOptions'),
+        blurStrengthSlider: document.getElementById('blurStrengthSlider'),
+        blurStrengthValue: document.getElementById('blurStrengthValue'),
+        cornerRadiusBlurSlider: document.getElementById('cornerRadiusBlurSlider'),
+        cornerRadiusBlurValue: document.getElementById('cornerRadiusBlurValue'),
+        gradientOptions: document.getElementById('gradientOptions'),
+        framePaddingSlider: document.getElementById('framePaddingSlider'),
+        framePaddingValue: document.getElementById('framePaddingValue'),
+        trimStartSlider: document.getElementById('trimStartSlider'),
+        trimStartLabel: document.getElementById('trimStartLabel'),
+        trimEndSlider: document.getElementById('trimEndSlider'),
+        trimEndLabel: document.getElementById('trimEndLabel'),
+
+        // Captions & Look Tab
+        captionInput: document.getElementById('captionInput'),
+        captionSizeSlider: document.getElementById('captionSizeSlider'),
+        captionSizeValue: document.getElementById('captionSizeValue'),
+        btnResetColor: document.getElementById('btnResetColor'),
+        brightnessSlider: document.getElementById('brightnessSlider'),
+        brightnessValue: document.getElementById('brightnessValue'),
+        contrastSlider: document.getElementById('contrastSlider'),
+        contrastValue: document.getElementById('contrastValue'),
+        saturationSlider: document.getElementById('saturationSlider'),
+        saturationValue: document.getElementById('saturationValue'),
+
+        // Export Tab
+        resolutionSelect: document.getElementById('resolutionSelect'),
+        formatSelect: document.getElementById('formatSelect'),
+        fpsSelect: document.getElementById('fpsSelect'),
+        qualitySelect: document.getElementById('qualitySelect'),
+        includeAudioCheckbox: document.getElementById('includeAudioCheckbox'),
+        formatSupportHint: document.getElementById('formatSupportHint'),
+        btnExportReel: document.getElementById('btnExportReel'),
+        exportProgressBox: document.getElementById('exportProgressBox'),
+        exportStatusText: document.getElementById('exportStatusText'),
+        exportPercentText: document.getElementById('exportPercentText'),
+        exportProgressBar: document.getElementById('exportProgressBar'),
+        exportTimeRemaining: document.getElementById('exportTimeRemaining'),
+        exportRenderStats: document.getElementById('exportRenderStats'),
+        btnCancelExport: document.getElementById('btnCancelExport'),
+        exportResultBox: document.getElementById('exportResultBox'),
+        exportResultMeta: document.getElementById('exportResultMeta'),
+        btnDownloadReel: document.getElementById('btnDownloadReel'),
+
+        toastContainer: document.getElementById('toastContainer'),
+      };
+
+      // Preview Canvas Context (720x1280 for razor-sharp 9:16 preview)
+      el.previewCanvas.width = 720;
+      el.previewCanvas.height = 1280;
+      const previewCtx = el.previewCanvas.getContext('2d', { alpha: false });
+
+      // Smooth offscreen canvas for GPU-friendly Blur Fill background
+      const blurBgCanvas = document.createElement('canvas');
+      blurBgCanvas.width = 270;
+      blurBgCanvas.height = 480;
+      const blurBgCtx = blurBgCanvas.getContext('2d', { alpha: false });
+
+      // Built-in 16:9 Demo Clip Canvas (1280x720)
+      const demoCanvas = document.createElement('canvas');
+      demoCanvas.width = 1280;
+      demoCanvas.height = 720;
+      const demoCtx = demoCanvas.getContext('2d', { alpha: false });
+
+      // Cached Web Audio graph for clean silent audio capture during export
+      let audioCtx = null;
+      let mediaElSource = null;
+      let audioPlaybackGain = null;
+      let audioExportDest = null;
+
+      // =======================================================================
+      // 3. UTILITIES
+      // =======================================================================
+      function clamp(val, min, max) {
+        return Math.min(max, Math.max(min, val));
+      }
+
+      function formatTime(sec) {
+        if (!Number.isFinite(sec) || sec < 0) sec = 0;
+        const mins = Math.floor(sec / 60);
+        const rem = sec % 60;
+        const whole = Math.floor(rem);
+        const tenths = Math.floor((rem - whole) * 10);
+        return `${String(mins).padStart(2, '0')}:${String(whole).padStart(2, '0')}.${tenths}`;
+      }
+
+      function showToast(message, type = 'info') {
+        const colors = {
+          info: 'border-zinc-700 bg-surface-900 text-zinc-100',
+          success: 'border-emerald-500/40 bg-emerald-950/90 text-emerald-200',
+          error: 'border-rose-500/40 bg-rose-950/90 text-rose-200',
+        };
+        const toast = document.createElement('div');
+        toast.className = `pointer-events-auto px-4 py-2.5 rounded-xl border text-xs font-medium shadow-xl backdrop-blur-md transition-all duration-300 ${colors[type] || colors.info}`;
+        toast.textContent = message;
+        el.toastContainer.appendChild(toast);
+        setTimeout(() => {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translateY(8px)';
+          setTimeout(() => toast.remove(), 300);
+        }, 2800);
+      }
+
+      function drawRoundedRect(ctx, x, y, w, h, r) {
+        const radius = Math.min(r, w / 2, h / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.arcTo(x + w, y, x + w, y + h, radius);
+        ctx.arcTo(x + w, y + h, x, y + h, radius);
+        ctx.arcTo(x, y + h, x, y, radius);
+        ctx.arcTo(x, y, x + w, y, radius);
+        ctx.closePath();
+      }
+
+      function ensureWebAudioGraph() {
+        if (state.sourceType !== 'file') return null;
+        try {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContextClass) return null;
+          if (!audioCtx) {
+            audioCtx = new AudioContextClass();
+            mediaElSource = audioCtx.createMediaElementSource(el.sourceVideo);
+            audioPlaybackGain = audioCtx.createGain();
+            audioExportDest = audioCtx.createMediaStreamDestination();
+            mediaElSource.connect(audioPlaybackGain);
+            audioPlaybackGain.connect(audioCtx.destination);
+            mediaElSource.connect(audioExportDest);
+          }
+          if (audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(() => {});
+          }
+          return audioExportDest;
+        } catch (err) {
+          console.warn('Web Audio capture unavailable:', err);
+          return null;
+        }
+      }
+
+      // =======================================================================
+      // 4. TIMELINE SCENE ADJUSTMENTS & UNDO/REDO HISTORY
+      // =======================================================================
+      function snapshotEditState() {
+        return JSON.stringify({
+          trimStart: state.trimStart,
+          trimEnd: state.trimEnd,
+          mode: state.mode,
+          zoom: state.zoom,
+          panX: state.panX,
+          panY: state.panY,
+          speed: state.speed,
+          sceneTransition: state.sceneTransition,
+          scenes: state.scenes,
+        });
+      }
+
+      function updateUndoRedoButtons() {
+        el.btnUndo.disabled = state.historyIndex <= 0;
+        el.btnRedo.disabled = state.historyIndex >= state.history.length - 1;
+      }
+
+      function pushHistory() {
+        const snap = snapshotEditState();
+        if (state.history[state.historyIndex] === snap) return;
+        state.history = state.history.slice(0, state.historyIndex + 1);
+        state.history.push(snap);
+        if (state.history.length > 40) state.history.shift();
+        state.historyIndex = state.history.length - 1;
+        updateUndoRedoButtons();
+      }
+
+      function restoreHistorySnapshot(snapStr) {
+        try {
+          const data = JSON.parse(snapStr);
+          state.trimStart = data.trimStart;
+          state.trimEnd = data.trimEnd;
+          state.mode = data.mode;
+          state.zoom = data.zoom;
+          state.panX = data.panX;
+          state.panY = data.panY;
+          state.speed = data.speed;
+          state.sceneTransition = data.sceneTransition;
+          state.scenes = data.scenes || [];
+
+          el.trimStartSlider.value = state.trimStart;
+          el.trimEndSlider.value = state.trimEnd;
+          el.trimStartLabel.textContent = formatTime(state.trimStart);
+          el.trimEndLabel.textContent = formatTime(state.trimEnd);
+          el.sceneTransitionLabel.textContent = state.sceneTransition === 'smooth' ? 'Smooth Motion' : 'Instant Cut';
+
+          syncFramingControlsUI();
+          updateTimelineUI();
+          renderScenesUI();
+          updateUndoRedoButtons();
+        } catch (e) {
+          console.warn('History restore failed:', e);
+        }
+      }
+
+      function autoUpdateActiveSceneIfParked() {
+        if (state.scenes.length === 0) return;
+        const active = state.scenes.find((s) => Math.abs(s.time - state.currentTime) < 0.22);
+        if (active) {
+          active.mode = state.mode;
+          active.zoom = Number(state.zoom.toFixed(2));
+          active.panX = Number(state.panX.toFixed(1));
+          active.panY = Number(state.panY.toFixed(1));
+          active.speed = state.speed;
+          renderScenesUI();
+        }
+      }
+
+      function updateLiveHud() {
+        const activeScene = state.scenes.find((s) => Math.abs(s.time - state.currentTime) < 0.22);
+        const sceneSuffix = activeScene ? ' • Editing Scene' : '';
+        el.liveHudBadge.textContent = `${Math.round(state.zoom * 100)}% • ${state.speed}×${sceneSuffix}`;
+      }
+
+      function easeInOutCubic(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      }
+
+      function syncFramingControlsUI() {
+        const pct = Math.round(state.zoom * 100);
+        el.zoomSlider.value = pct;
+        el.zoomValue.textContent = `${pct}%`;
+        el.panXSlider.value = state.panX;
+        el.panXValue.textContent = `${Math.round(state.panX)}%`;
+        el.panYSlider.value = state.panY;
+        el.panYValue.textContent = `${Math.round(state.panY)}%`;
+        el.speedSelect.value = String(state.speed);
+
+        document.querySelectorAll('.mode-btn').forEach((btn) => {
+          const active = btn.dataset.mode === state.mode;
+          btn.className = active
+            ? 'mode-btn p-2.5 rounded-xl border text-center transition border-purple-500 bg-purple-500/15 text-white'
+            : 'mode-btn p-2.5 rounded-xl border text-center transition border-zinc-800 bg-surface-850 text-zinc-300 hover:border-zinc-700';
+        });
+
+        el.blurOptions.classList.toggle('hidden', state.mode !== 'blur');
+        el.gradientOptions.classList.toggle('hidden', state.mode !== 'gradient');
+        updateLiveHud();
+      }
+
+      function evaluateSceneAt(time) {
+        if (state.scenes.length === 0) return null;
+        const sorted = [...state.scenes].sort((a, b) => a.time - b.time);
+
+        if (time <= sorted[0].time) {
+          return { ...sorted[0] };
+        }
+        const last = sorted[sorted.length - 1];
+        if (time >= last.time) {
+          return { ...last };
+        }
+
+        let prev = sorted[0];
+        let next = sorted[1];
+        for (let i = 0; i < sorted.length - 1; i++) {
+          if (time >= sorted[i].time && time <= sorted[i + 1].time) {
+            prev = sorted[i];
+            next = sorted[i + 1];
+            break;
+          }
+        }
+
+        if (state.sceneTransition === 'cut') {
+          return { ...prev };
+        }
+
+        const span = Math.max(0.001, next.time - prev.time);
+        const rawT = clamp((time - prev.time) / span, 0, 1);
+        const t = easeInOutCubic(rawT);
+
+        return {
+          mode: prev.mode,
+          zoom: prev.zoom + (next.zoom - prev.zoom) * t,
+          panX: prev.panX + (next.panX - prev.panX) * t,
+          panY: prev.panY + (next.panY - prev.panY) * t,
+          speed: prev.speed || 1.0,
+        };
+      }
+
+      function applySceneFramingAt(time, updateUI = false) {
+        const evalScene = evaluateSceneAt(time);
+        if (!evalScene) return;
+        state.mode = evalScene.mode;
+        state.zoom = evalScene.zoom;
+        state.panX = evalScene.panX;
+        state.panY = evalScene.panY;
+        state.speed = evalScene.speed || 1.0;
+
+        if (state.sourceType === 'file') {
+          const targetRate = clamp(state.speed, 0.25, 4.0);
+          if (Math.abs(el.sourceVideo.playbackRate - targetRate) > 0.01) {
+            el.sourceVideo.playbackRate = targetRate;
+          }
+        }
+        if (updateUI) {
+          syncFramingControlsUI();
+        }
+      }
+
+      function upsertScenePoint(time, props) {
+        const clampedTime = Number(clamp(time, 0, state.duration).toFixed(2));
+        const existing = state.scenes.find((s) => Math.abs(s.time - clampedTime) < 0.22);
+        if (existing) {
+          Object.assign(existing, props, { time: clampedTime });
+          state.scenes.sort((a, b) => a.time - b.time);
+          return { saved: existing, existed: true };
+        }
+        const created = {
+          id: `sc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          time: clampedTime,
+          mode: props.mode ?? state.mode,
+          zoom: Number((props.zoom ?? state.zoom).toFixed(2)),
+          panX: Math.round(props.panX ?? state.panX),
+          panY: Math.round(props.panY ?? state.panY),
+          speed: props.speed ?? state.speed,
+          tag: props.tag || '',
+        };
+        state.scenes.push(created);
+        state.scenes.sort((a, b) => a.time - b.time);
+        return { saved: created, existed: false };
+      }
+
+      function addOrUpdateSceneAtCurrentTime() {
+        if (!state.hasSource) return;
+        const { saved, existed } = upsertScenePoint(state.currentTime, {
+          mode: state.mode,
+          zoom: state.zoom,
+          panX: state.panX,
+          panY: state.panY,
+          speed: state.speed,
+          tag: '',
+        });
+        showToast(
+          existed
+            ? `Updated scene at ${formatTime(saved.time)}`
+            : `Added scene at ${formatTime(saved.time)}`,
+          'success'
+        );
+        pushHistory();
+        renderScenesUI();
+      }
+
+      function addQuickZoomScene(direction) {
+        if (!state.hasSource) return;
+        state.sceneTransition = 'smooth';
+        el.sceneTransitionLabel.textContent = 'Smooth Motion';
+
+        const tStart = state.currentTime;
+        const stepDur = Math.min(1.5, Math.max(0.6, state.duration * 0.15));
+        const tEnd = clamp(tStart + stepDur, 0, state.duration);
+
+        if (direction === 'in') {
+          const startZoom = clamp(state.zoom, 1.0, 1.8);
+          const endZoom = clamp(startZoom + 0.45, 1.35, 2.3);
+          upsertScenePoint(tStart, { zoom: startZoom, panX: state.panX, panY: state.panY, mode: state.mode, speed: state.speed, tag: 'Zoom In' });
+          upsertScenePoint(tEnd, { zoom: endZoom, panX: state.panX, panY: state.panY, mode: state.mode, speed: state.speed, tag: 'Peak' });
+          showToast(`Added Zoom In (${formatTime(tStart)} → ${formatTime(tEnd)})`, 'success');
+        } else {
+          const startZoom = clamp(Math.max(state.zoom, 1.45), 1.35, 2.3);
+          const endZoom = 1.0;
+          upsertScenePoint(tStart, { zoom: startZoom, panX: state.panX, panY: state.panY, mode: state.mode, speed: state.speed, tag: 'Zoom Out' });
+          upsertScenePoint(tEnd, { zoom: endZoom, panX: 0, panY: 0, mode: state.mode, speed: state.speed, tag: 'Wide' });
+          showToast(`Added Zoom Out (${formatTime(tStart)} → ${formatTime(tEnd)})`, 'success');
+        }
+
+        applySceneFramingAt(state.currentTime, true);
+        pushHistory();
+        renderScenesUI();
+      }
+
+      function addQuickFastScene() {
+        if (!state.hasSource) return;
+        const fastRate = 2.0;
+        const tStart = state.currentTime;
+        const burstDur = Math.min(2.5, Math.max(0.8, state.duration * 0.2));
+        const tEnd = clamp(tStart + burstDur, 0, state.duration);
+
+        upsertScenePoint(tStart, { mode: state.mode, zoom: state.zoom, panX: state.panX, panY: state.panY, speed: fastRate, tag: 'Fast 2×' });
+        if (tEnd > tStart + 0.3) {
+          upsertScenePoint(tEnd, { mode: state.mode, zoom: state.zoom, panX: state.panX, panY: state.panY, speed: 1.0, tag: '1×' });
+        }
+
+        applySceneFramingAt(state.currentTime, true);
+        pushHistory();
+        renderScenesUI();
+        showToast(`Added Faster ${fastRate}× scene (${formatTime(tStart)} → ${formatTime(tEnd)})`, 'success');
+      }
+
+      function removeSceneById(id) {
+        state.scenes = state.scenes.filter((s) => s.id !== id);
+        if (state.scenes.length > 0) {
+          applySceneFramingAt(state.currentTime, true);
+        }
+        pushHistory();
+        renderScenesUI();
+        showToast('Removed scene adjustment.', 'info');
+      }
+
+      function updateAddSceneButtonLabel() {
+        const parked = state.scenes.some((s) => Math.abs(s.time - state.currentTime) < 0.22);
+        el.btnAddScene.textContent = parked
+          ? `Update Scene @ ${formatTime(state.currentTime)}`
+          : `+ Add Scene @ ${formatTime(state.currentTime)}`;
+      }
+
+      function renderScenesUI() {
+        const count = state.scenes.length;
+        el.sceneCountBadge.textContent = `${count} ${count === 1 ? 'scene' : 'scenes'}`;
+        el.btnClearScenes.classList.toggle('hidden', count === 0);
+        updateAddSceneButtonLabel();
+
+        // Render clickable diamond markers on visual timeline
+        el.sceneMarkersTrack.innerHTML = '';
+        const dur = Math.max(0.01, state.duration);
+        state.scenes.forEach((sc) => {
+          const pct = clamp((sc.time / dur) * 100, 0, 100);
+          const isParked = Math.abs(sc.time - state.currentTime) < 0.22;
+          const marker = document.createElement('button');
+          marker.type = 'button';
+          marker.title = `Jump to scene @ ${formatTime(sc.time)} (${Math.round(sc.zoom * 100)}%, ${sc.speed}×)`;
+          marker.style.left = `${pct}%`;
+          marker.className = `pointer-events-auto absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rotate-45 border transition ${
+            isParked
+              ? 'bg-amber-400 border-white scale-125 shadow-[0_0_8px_rgba(251,191,36,0.9)]'
+              : 'bg-fuchsia-500 border-white/80 hover:scale-125'
+          }`;
+          marker.addEventListener('mousedown', (e) => e.stopPropagation());
+          marker.addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.currentTime = sc.time;
+            if (state.sourceType === 'file') el.sourceVideo.currentTime = sc.time;
+            applySceneFramingAt(sc.time, true);
+            updateTimelineUI();
+            renderScenesUI();
+          });
+          el.sceneMarkersTrack.appendChild(marker);
+        });
+
+        // Render scene chips list
+        if (count === 0) {
+          el.scenesList.innerHTML = '<p class="text-[11px] text-zinc-500">Scrub the timeline, reframe or pick a quick scene button to animate Zoom, Pan, Mode, or Speed.</p>';
+          return;
+        }
+
+        el.scenesList.innerHTML = '';
+        state.scenes.forEach((sc) => {
+          const isParked = Math.abs(sc.time - state.currentTime) < 0.22;
+          const chip = document.createElement('div');
+          chip.className = `flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] border transition ${
+            isParked
+              ? 'bg-purple-500/20 border-purple-400 text-white'
+              : 'bg-surface-800 border-zinc-700/80 text-zinc-300 hover:border-zinc-600'
+          }`;
+
+          const jumpBtn = document.createElement('button');
+          jumpBtn.type = 'button';
+          jumpBtn.className = 'flex items-center gap-1.5 font-mono cursor-pointer';
+          const tagStr = sc.tag ? ` • ${sc.tag}` : '';
+          jumpBtn.textContent = `${formatTime(sc.time)} (${Math.round(sc.zoom * 100)}% ${sc.speed}×${tagStr})`;
+          jumpBtn.addEventListener('click', () => {
+            state.currentTime = sc.time;
+            if (state.sourceType === 'file') el.sourceVideo.currentTime = sc.time;
+            applySceneFramingAt(sc.time, true);
+            updateTimelineUI();
+            renderScenesUI();
+          });
+
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.title = 'Remove scene';
+          delBtn.className = 'text-zinc-400 hover:text-rose-400 font-bold px-0.5 leading-none';
+          delBtn.textContent = '×';
+          delBtn.addEventListener('click', () => removeSceneById(sc.id));
+
+          chip.appendChild(jumpBtn);
+          chip.appendChild(delBtn);
+          el.scenesList.appendChild(chip);
+        });
+      }
+
+      // =======================================================================
+      // 5. BUILT-IN 16:9 DEMO CLIP GENERATOR
+      // =======================================================================
+      function renderDemoFrame(t) {
+        const w = demoCanvas.width;
+        const h = demoCanvas.height;
+        const ctx = demoCtx;
+
+        // Animated gradient sky
+        const sky = ctx.createLinearGradient(0, 0, w, h);
+        sky.addColorStop(0, '#0f172a');
+        sky.addColorStop(0.5, '#3b0764');
+        sky.addColorStop(1, '#be185d');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, h);
+
+        // Animated glowing horizon grid
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 12; i++) {
+          const y = 390 + i * 32;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y);
+          ctx.stroke();
+        }
+        const offset = (t * 80) % 100;
+        for (let x = -200; x < w + 200; x += 100) {
+          ctx.beginPath();
+          ctx.moveTo(w / 2 + (x - w / 2) * 0.25, 390);
+          ctx.lineTo(x + offset, h);
+          ctx.stroke();
+        }
+
+        // Moving Subject (so user can test Pan / Zoom tracking)
+        const subjectX = w * 0.5 + Math.sin(t * 0.9) * 340;
+        const subjectY = h * 0.45 + Math.cos(t * 1.8) * 35;
+
+        // Glow behind subject
+        const glow = ctx.createRadialGradient(subjectX, subjectY, 10, subjectX, subjectY, 150);
+        glow.addColorStop(0, 'rgba(244, 114, 182, 0.85)');
+        glow.addColorStop(0.5, 'rgba(168, 85, 247, 0.35)');
+        glow.addColorStop(1, 'rgba(168, 85, 247, 0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(subjectX, subjectY, 150, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Stylized subject badge
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(subjectX, subjectY, 54, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#1e1b4b';
+        ctx.font = '800 22px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('SUBJECT', subjectX, subjectY - 6);
+        ctx.font = '600 14px Inter, sans-serif';
+        ctx.fillStyle = '#9333ea';
+        ctx.fillText(`${t.toFixed(1)}s`, subjectX, subjectY + 18);
+
+        // Corner 16:9 HUD marker
+        ctx.fillStyle = 'rgba(0,0,0,0.45)';
+        drawRoundedRect(ctx, 28, 28, 260, 44, 12);
+        ctx.fill();
+        ctx.fillStyle = '#e4e4e7';
+        ctx.font = '600 16px Inter, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('16:9 DEMO CLIP • TRACK ME', 46, 51);
+      }
+
+      // =======================================================================
+      // 6. CORE 9:16 COMPOSITING RENDERER (PREVIEW & EXPORT)
+      // =======================================================================
+      function getPanRanges(outW, outH) {
+        const srcW = state.sourceType === 'demo' ? demoCanvas.width : el.sourceVideo.videoWidth;
+        const srcH = state.sourceType === 'demo' ? demoCanvas.height : el.sourceVideo.videoHeight;
+        if (!srcW || !srcH) return { rangeX: 0, rangeY: 0 };
+
+        if (state.mode === 'crop') {
+          const baseScale = Math.max(outW / srcW, outH / srcH);
+          const drawW = srcW * baseScale * state.zoom;
+          const drawH = srcH * baseScale * state.zoom;
+          return {
+            rangeX: Math.max(0, (drawW - outW) / 2),
+            rangeY: Math.max(0, (drawH - outH) / 2),
+          };
+        }
+
+        const scaleFactor = outW / 540;
+        const pad = state.mode === 'gradient' ? state.framePadding * scaleFactor : 0;
+        const availW = Math.max(40, outW - pad * 2);
+        const availH = Math.max(40, outH - pad * 2);
+        const fitScale = Math.min(availW / srcW, availH / srcH);
+        const drawW = srcW * fitScale * state.zoom;
+        const drawH = srcH * fitScale * state.zoom;
+        return {
+          rangeX: Math.max(outW * 0.25, Math.abs(drawW - outW) / 2),
+          rangeY: Math.max(outH * 0.25, Math.abs(drawH - outH) / 2),
+        };
+      }
+
+      function buildCssFilterString() {
+        const preset = FILTER_PRESETS[state.filterPreset] || FILTER_PRESETS.none;
+        const isNeutral =
+          state.brightness === 100 &&
+          state.contrast === 100 &&
+          state.saturation === 100 &&
+          !preset.extra;
+        if (isNeutral) return 'none';
+
+        const parts = [
+          `brightness(${state.brightness}%)`,
+          `contrast(${state.contrast}%)`,
+          `saturate(${state.saturation}%)`,
+        ];
+        if (preset.extra) parts.push(preset.extra);
+        return parts.join(' ');
+      }
+
+      function renderCompositeFrame(ctx, outW, outH) {
+        const source = state.sourceType === 'demo' ? demoCanvas : el.sourceVideo;
+        const srcW = state.sourceType === 'demo' ? demoCanvas.width : el.sourceVideo.videoWidth;
+        const srcH = state.sourceType === 'demo' ? demoCanvas.height : el.sourceVideo.videoHeight;
+
+        ctx.save();
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, outW, outH);
+
+        if (!srcW || !srcH) {
+          ctx.restore();
+          return;
+        }
+
+        const filterStr = buildCssFilterString();
+        const scaleFactor = outW / 540;
+
+        if (state.mode === 'crop') {
+          const baseScale = Math.max(outW / srcW, outH / srcH);
+          const drawW = srcW * baseScale * state.zoom;
+          const drawH = srcH * baseScale * state.zoom;
+
+          const overflowX = Math.max(0, (drawW - outW) / 2);
+          const overflowY = Math.max(0, (drawH - outH) / 2);
+          const dx = (outW - drawW) / 2 + (state.panX / 100) * overflowX;
+          const dy = (outH - drawH) / 2 + (state.panY / 100) * overflowY;
+
+          if (filterStr !== 'none') ctx.filter = filterStr;
+          ctx.drawImage(source, dx, dy, drawW, drawH);
+          if (filterStr !== 'none') ctx.filter = 'none';
+        } else {
+          if (state.mode === 'blur') {
+            const bgW = blurBgCanvas.width;
+            const bgH = blurBgCanvas.height;
+            const bgScale = Math.max(bgW / srcW, bgH / srcH) * 1.15;
+            const bw = srcW * bgScale;
+            const bh = srcH * bgScale;
+            const blurPx = Math.max(2, Math.round(state.blurStrength * 0.5));
+
+            blurBgCtx.save();
+            blurBgCtx.imageSmoothingEnabled = true;
+            blurBgCtx.imageSmoothingQuality = 'high';
+            blurBgCtx.filter = `blur(${blurPx}px) brightness(72%)`;
+            blurBgCtx.drawImage(source, (bgW - bw) / 2, (bgH - bh) / 2, bw, bh);
+            blurBgCtx.restore();
+
+            ctx.drawImage(blurBgCanvas, 0, 0, outW, outH);
+          } else {
+            const stops = BG_PRESETS[state.bgPreset] || BG_PRESETS['linear-1'];
+            const grad = ctx.createLinearGradient(0, 0, outW, outH);
+            grad.addColorStop(0, stops[0]);
+            grad.addColorStop(0.5, stops[1]);
+            grad.addColorStop(1, stops[2]);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, outW, outH);
+          }
+
+          const pad = state.mode === 'gradient' ? state.framePadding * scaleFactor : 0;
+          const availW = Math.max(40, outW - pad * 2);
+          const availH = Math.max(40, outH - pad * 2);
+          const fitScale = Math.min(availW / srcW, availH / srcH);
+          const drawW = srcW * fitScale * state.zoom;
+          const drawH = srcH * fitScale * state.zoom;
+
+          const maxPanX = Math.max(outW * 0.25, Math.abs(drawW - outW) / 2);
+          const maxPanY = Math.max(outH * 0.25, Math.abs(drawH - outH) / 2);
+          const dx = (outW - drawW) / 2 + (state.panX / 100) * maxPanX;
+          const dy = (outH - drawH) / 2 + (state.panY / 100) * maxPanY;
+
+          const radius = state.mode === 'blur'
+            ? state.cornerRadius * scaleFactor
+            : Math.max(12, state.cornerRadius) * scaleFactor;
+
+          ctx.save();
+          if (radius > 0) {
+            drawRoundedRect(ctx, dx, dy, drawW, drawH, radius);
+            ctx.clip();
+          }
+          if (filterStr !== 'none') ctx.filter = filterStr;
+          ctx.drawImage(source, dx, dy, drawW, drawH);
+          if (filterStr !== 'none') ctx.filter = 'none';
+          ctx.restore();
+        }
+
+        // Hook Caption Overlay
+        const text = state.captionText.trim();
+        if (text) {
+          const fontSize = Math.round(state.captionSize * scaleFactor);
+          ctx.font = `800 ${fontSize}px Inter, system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          // Word wrap
+          const maxTextW = outW * 0.82;
+          const words = text.split(/\s+/);
+          const lines = [];
+          let currentLine = '';
+          for (const word of words) {
+            const test = currentLine ? `${currentLine} ${word}` : word;
+            if (ctx.measureText(test).width > maxTextW && currentLine) {
+              lines.push(currentLine);
+              currentLine = word;
+            } else {
+              currentLine = test;
+            }
+          }
+          if (currentLine) lines.push(currentLine);
+
+          const lineHeight = fontSize * 1.28;
+          const blockH = lines.length * lineHeight;
+          const maxLineW = Math.max(...lines.map((l) => ctx.measureText(l).width));
+          const padX = fontSize * 0.65;
+          const padY = fontSize * 0.42;
+
+          let centerY = outH * 0.2;
+          if (state.captionPos === 'center') centerY = outH * 0.5;
+          else if (state.captionPos === 'bottom') centerY = outH * 0.76;
+
+          const boxW = maxLineW + padX * 2;
+          const boxH = blockH + padY * 2;
+          const boxX = (outW - boxW) / 2;
+          const boxY = centerY - boxH / 2;
+
+          if (state.captionStyle !== 'bold-outline') {
+            if (state.captionStyle === 'white-pill') {
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            } else if (state.captionStyle === 'dark-glass') {
+              ctx.fillStyle = 'rgba(15, 15, 22, 0.78)';
+            } else if (state.captionStyle === 'neon-purple') {
+              const g = ctx.createLinearGradient(boxX, boxY, boxX + boxW, boxY + boxH);
+              g.addColorStop(0, '#9333ea');
+              g.addColorStop(1, '#db2777');
+              ctx.fillStyle = g;
+            }
+            drawRoundedRect(ctx, boxX, boxY, boxW, boxH, fontSize * 0.45);
+            ctx.fill();
+          }
+
+          lines.forEach((line, idx) => {
+            const y = centerY - blockH / 2 + lineHeight * (idx + 0.5);
+            if (state.captionStyle === 'bold-outline') {
+              ctx.lineWidth = Math.max(4, fontSize * 0.16);
+              ctx.strokeStyle = '#000000';
+              ctx.lineJoin = 'round';
+              ctx.strokeText(line, outW / 2, y);
+              ctx.fillStyle = '#ffffff';
+              ctx.fillText(line, outW / 2, y);
+            } else if (state.captionStyle === 'white-pill') {
+              ctx.fillStyle = '#09090b';
+              ctx.fillText(line, outW / 2, y);
+            } else {
+              ctx.fillStyle = '#ffffff';
+              ctx.fillText(line, outW / 2, y);
+            }
+          });
+        }
+
+        ctx.restore();
+      }
+
+      // =======================================================================
+      // 7. WORKSPACE ACTIVATION, TIMELINE UI & MASTER LOOP
+      // =======================================================================
+      function updatePlayPauseUI() {
+        el.iconPlay.classList.toggle('hidden', state.isPlaying);
+        el.iconPause.classList.toggle('hidden', !state.isPlaying);
+      }
+
+      function updateTimelineUI() {
+        const dur = Math.max(0.01, state.duration);
+        el.seekSlider.value = state.currentTime;
+        el.currentTimeDisplay.textContent = formatTime(state.currentTime);
+        el.totalTimeDisplay.textContent = formatTime(state.duration);
+        el.clipLengthDisplay.textContent = `Clip: ${formatTime(Math.max(0, state.trimEnd - state.trimStart))}`;
+
+        const leftPct = clamp((state.trimStart / dur) * 100, 0, 100);
+        const rightPct = clamp((state.trimEnd / dur) * 100, leftPct, 100);
+        const widthPct = Math.max(0, rightPct - leftPct);
+        const playheadPct = clamp((state.currentTime / dur) * 100, 0, 100);
+
+        el.trimHighlightBar.style.left = `${leftPct}%`;
+        el.trimHighlightBar.style.width = `${widthPct}%`;
+        el.trimOutLeft.style.width = `${leftPct}%`;
+        el.trimOutRight.style.width = `${100 - rightPct}%`;
+        el.trimHandleLeft.style.left = `${leftPct}%`;
+        el.trimHandleRight.style.left = `${rightPct}%`;
+        el.playheadNeedle.style.left = `${playheadPct}%`;
+
+        updateAddSceneButtonLabel();
+        updateLiveHud();
+      }
+
+      function activateWorkspace(durationSec, badgeText) {
+        state.hasSource = true;
+        state.duration = Math.max(0.5, durationSec);
+        state.currentTime = 0;
+        state.trimStart = 0;
+        state.trimEnd = state.duration;
+        state.isPlaying = false;
+        state.speed = 1.0;
+        state.zoom = 1.0;
+        state.panX = 0;
+        state.panY = 0;
+        state.scenes = [];
+        state.history = [];
+        state.historyIndex = -1;
+
+        el.speedSelect.value = '1';
+        if (state.sourceType === 'file') {
+          el.sourceVideo.playbackRate = 1.0;
+          el.sourceVideo.preservesPitch = true;
+          el.sourceVideo.webkitPreservesPitch = true;
+          el.sourceVideo.currentTime = 0;
+        }
+
+        el.seekSlider.max = state.duration;
+        el.trimStartSlider.max = state.duration;
+        el.trimEndSlider.max = state.duration;
+        el.trimStartSlider.value = 0;
+        el.trimEndSlider.value = state.duration;
+        el.trimStartLabel.textContent = formatTime(0);
+        el.trimEndLabel.textContent = formatTime(state.duration);
+
+        el.sourceInfoBadge.textContent = badgeText;
+        el.uploadSection.classList.add('hidden');
+        el.editorSection.classList.remove('hidden');
+        el.exportResultBox.classList.add('hidden');
+
+        syncFramingControlsUI();
+        updatePlayPauseUI();
+        updateTimelineUI();
+        renderScenesUI();
+        pushHistory();
+      }
+
+      function loadUserVideoFile(file) {
+        if (!file || !file.type.startsWith('video/')) {
+          showToast('Please choose a valid video file (MP4, MOV, WebM).', 'error');
+          return;
+        }
+        if (state.objectUrl) {
+          URL.revokeObjectURL(state.objectUrl);
+        }
+        state.objectUrl = URL.createObjectURL(file);
+        state.sourceType = 'file';
+        state.sourceFile = file;
+        state.fileName = file.name.replace(/\.[^.]+$/, '') || 'reelcraft-video';
+
+        el.sourceVideo.pause();
+        el.sourceVideo.src = state.objectUrl;
+        el.sourceVideo.load();
+
+        el.sourceVideo.onloadedmetadata = () => {
+          const w = el.sourceVideo.videoWidth;
+          const h = el.sourceVideo.videoHeight;
+          const d = el.sourceVideo.duration;
+          activateWorkspace(d, `${w}×${h} • ${formatTime(d)}`);
+          showToast(`Loaded "${file.name}"`, 'success');
+        };
+
+        el.sourceVideo.onerror = () => {
+          showToast('Could not decode this video format in your browser.', 'error');
+        };
+      }
+
+      function loadDemoClip() {
+        el.sourceVideo.pause();
+        state.sourceType = 'demo';
+        state.sourceFile = null;
+        state.fileName = 'reelcraft-demo';
+        activateWorkspace(12, 'Demo 1280×720 (16:9) • 00:12.0');
+        state.isPlaying = true;
+        updatePlayPauseUI();
+        showToast('Loaded built-in 16:9 Demo Clip!', 'success');
+      }
+
+      // Master Animation Loop
+      let lastLoopTs = performance.now();
+      function mainLoop(now) {
+        const dt = Math.min((now - lastLoopTs) / 1000, 0.1);
+        lastLoopTs = now;
+
+        if (state.hasSource && !state.isExporting) {
+          if (state.sourceType === 'demo') {
+            if (state.isPlaying) {
+              state.currentTime += dt * (state.speed || 1.0);
+              if (state.currentTime >= state.trimEnd) {
+                state.currentTime = state.trimStart;
+              }
+              if (state.scenes.length > 0 && !state.isDraggingCanvas) {
+                applySceneFramingAt(state.currentTime, false);
+              }
+              updateTimelineUI();
+            }
+            renderDemoFrame(state.currentTime);
+            renderCompositeFrame(previewCtx, el.previewCanvas.width, el.previewCanvas.height);
+          } else if (state.sourceType === 'file') {
+            if (state.isPlaying) {
+              if (el.sourceVideo.currentTime >= state.trimEnd || el.sourceVideo.ended) {
+                el.sourceVideo.currentTime = state.trimStart;
+                if (el.sourceVideo.paused) {
+                  el.sourceVideo.play().catch(() => {});
+                }
+              }
+              state.currentTime = el.sourceVideo.currentTime;
+              if (state.scenes.length > 0 && !state.isDraggingCanvas) {
+                applySceneFramingAt(state.currentTime, false);
+              }
+              updateTimelineUI();
+            }
+            if (el.sourceVideo.readyState >= 2) {
+              renderCompositeFrame(previewCtx, el.previewCanvas.width, el.previewCanvas.height);
+            }
+          }
+        }
+
+        requestAnimationFrame(mainLoop);
+      }
+
+      // =======================================================================
+      // 8. HIGH-QUALITY 720P / 1080P MP4 (WEBCODECS) & WEBM EXPORT ENGINE
+      // =======================================================================
+      function supportsWebCodecsMP4() {
+        return (
+          typeof VideoEncoder !== 'undefined' &&
+          typeof VideoFrame !== 'undefined' &&
+          typeof Mp4Muxer !== 'undefined'
+        );
+      }
+
+      function pickSupportedMimeType(preferredFormat = 'mp4', hasAudio = true) {
+        const mp4WithAudio = [
+          'video/mp4;codecs=avc1.64002a,mp4a.40.2',
+          'video/mp4;codecs=avc1.4d402a,mp4a.40.2',
+          'video/mp4;codecs=avc1.4d4028,mp4a.40.2',
+          'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+          'video/mp4;codecs=avc1,mp4a.40.2',
+          'video/mp4',
+        ];
+        const mp4VideoOnly = [
+          'video/mp4;codecs=avc1.64002a',
+          'video/mp4;codecs=avc1.4d402a',
+          'video/mp4;codecs=avc1.4d4028',
+          'video/mp4;codecs=avc1.42E01E',
+          'video/mp4;codecs=avc1',
+          'video/mp4',
+        ];
+        const webmWithAudio = [
+          'video/webm;codecs=vp9,opus',
+          'video/webm;codecs=vp8,opus',
+          'video/webm',
+        ];
+        const webmVideoOnly = [
+          'video/webm;codecs=vp9',
+          'video/webm;codecs=vp8',
+          'video/webm',
+        ];
+
+        const mp4List = hasAudio ? mp4WithAudio : mp4VideoOnly;
+        const webmList = hasAudio ? webmWithAudio : webmVideoOnly;
+
+        if (typeof MediaRecorder === 'undefined') {
+          return { mimeType: '', ext: 'webm', fellBack: true };
+        }
+
+        const primary = preferredFormat === 'mp4' ? mp4List : webmList;
+        const secondary = preferredFormat === 'mp4' ? webmList : mp4List;
+
+        for (const mime of primary) {
+          if (MediaRecorder.isTypeSupported(mime)) {
+            return { mimeType: mime, ext: preferredFormat, fellBack: false };
+          }
+        }
+        for (const mime of secondary) {
+          if (MediaRecorder.isTypeSupported(mime)) {
+            return { mimeType: mime, ext: preferredFormat === 'mp4' ? 'webm' : 'mp4', fellBack: true };
+          }
+        }
+        return { mimeType: '', ext: 'webm', fellBack: true };
+      }
+
+      function updateFormatSupportHint() {
+        const pref = el.formatSelect.value;
+        if (pref === 'mp4' && supportsWebCodecsMP4()) {
+          el.formatSupportHint.textContent = 'Frame-Exact Hardware H.264 MP4 engine active — zero dropped frames & smooth playback.';
+          return;
+        }
+        const { ext, fellBack } = pickSupportedMimeType(pref, el.includeAudioCheckbox.checked);
+        if (pref === 'mp4' && !fellBack) {
+          el.formatSupportHint.textContent = 'Native MP4 (H.264) recording is supported by your browser.';
+        } else if (pref === 'mp4' && fellBack) {
+          el.formatSupportHint.textContent = 'This browser does not support native MP4 encoding — will automatically export as high-quality WebM.';
+        } else {
+          el.formatSupportHint.textContent = `Exporting in ${ext.toUpperCase()} format with high-bitrate encoding.`;
+        }
+      }
+
+      function computeExportBitrate(outW, fps, quality) {
+        const is1080 = outW >= 1080;
+        const fpsBoost = fps >= 60 ? 1.3 : 1.0;
+        const baseMap = {
+          standard: is1080 ? 10000000 : 7500000,
+          high: is1080 ? 16000000 : 12000000,
+          ultra: is1080 ? 24000000 : 16000000,
+        };
+        return Math.round((baseMap[quality] || baseMap.high) * fpsBoost);
+      }
+
+      function seekVideoAndWait(videoEl, timeSec, timeoutMs = 1500) {
+        return new Promise((resolve) => {
+          const maxTime = Number.isFinite(videoEl.duration) ? Math.max(0, videoEl.duration - 0.02) : timeSec;
+          const target = clamp(timeSec, 0, maxTime);
+          if (Math.abs(videoEl.currentTime - target) < 0.008 && videoEl.readyState >= 2) {
+            resolve();
+            return;
+          }
+          let finished = false;
+          const done = () => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timer);
+            videoEl.removeEventListener('seeked', done);
+            resolve();
+          };
+          const timer = setTimeout(done, timeoutMs);
+          videoEl.addEventListener('seeked', done, { once: true });
+          videoEl.currentTime = target;
+        });
+      }
+
+      async function findBestWebCodecsVideoConfig(outW, outH, fps, bitrate) {
+        const codecs = ['avc1.64002a', 'avc1.4d402a', 'avc1.42002a', 'avc1.42E01E'];
+        const accelModes = ['prefer-hardware', 'no-preference'];
+
+        for (const hardwareAcceleration of accelModes) {
+          for (const codec of codecs) {
+            const cfg = {
+              codec,
+              width: outW,
+              height: outH,
+              bitrate,
+              framerate: fps,
+              hardwareAcceleration,
+              avc: { format: 'avc' },
+            };
+            try {
+              const support = await VideoEncoder.isConfigSupported(cfg);
+              if (support && support.supported) {
+                return support.config || cfg;
+              }
+            } catch (_) {}
+          }
+        }
+        return null;
+      }
+
+      async function encodeTrimmedAudioTrack(muxer, decodedAudio, frameSourceTimes, fps, chCount, sampleRate) {
+        const audioEncoder = new AudioEncoder({
+          output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
+          error: (err) => console.warn('AudioEncoder error:', err),
+        });
+
+        audioEncoder.configure({
+          codec: 'mp4a.40.2',
+          numberOfChannels: chCount,
+          sampleRate,
+          bitrate: 192000,
+        });
+
+        const totalOutputDuration = frameSourceTimes.length / fps;
+        const totalOutputSamples = Math.max(1, Math.floor(totalOutputDuration * sampleRate));
+        const chunkFrames = 4096;
+        const srcChannels = [];
+        for (let c = 0; c < chCount; c++) {
+          srcChannels.push(decodedAudio.getChannelData(Math.min(c, decodedAudio.numberOfChannels - 1)));
+        }
+        const srcLen = decodedAudio.length;
+        const maxFrameIdx = Math.max(0, frameSourceTimes.length - 1);
+
+        for (let offset = 0; offset < totalOutputSamples; offset += chunkFrames) {
+          if (state.exportCancelled) break;
+          const frames = Math.min(chunkFrames, totalOutputSamples - offset);
+          const planar = new Float32Array(frames * chCount);
+
+          for (let i = 0; i < frames; i++) {
+            const outSec = (offset + i) / sampleRate;
+            const exactFrame = outSec * fps;
+            const f0 = Math.min(maxFrameIdx, Math.floor(exactFrame));
+            const f1 = Math.min(maxFrameIdx, f0 + 1);
+            const frac = exactFrame - f0;
+            const srcSec = frameSourceTimes[f0] + (frameSourceTimes[f1] - frameSourceTimes[f0]) * frac;
+            const srcIdx = clamp(Math.floor(srcSec * sampleRate), 0, srcLen - 1);
+
+            for (let c = 0; c < chCount; c++) {
+              planar[c * frames + i] = srcChannels[c][srcIdx];
+            }
+          }
+
+          const audioData = new AudioData({
+            format: 'f32-planar',
+            sampleRate,
+            numberOfFrames: frames,
+            numberOfChannels: chCount,
+            timestamp: Math.round((offset / sampleRate) * 1_000_000),
+            data: planar,
+          });
+          audioEncoder.encode(audioData);
+          audioData.close();
+
+          if (audioEncoder.encodeQueueSize > 8) {
+            await new Promise((r) => setTimeout(r, 4));
+          }
+        }
+
+        await audioEncoder.flush();
+        audioEncoder.close();
+      }
+
+      async function exportWithWebCodecsMP4({ outW, outH, resLabel, fps, videoBitrate, wantAudio, clipDuration, exportCanvas, exportCtx }) {
+        const videoConfig = await findBestWebCodecsVideoConfig(outW, outH, fps, videoBitrate);
+        if (!videoConfig) return null;
+
+        // Pre-decode audio if requested so we know exact sampleRate & channels for MP4 muxer
+        let decodedAudio = null;
+        let audioChannels = 2;
+        let audioSampleRate = 48000;
+        let includeAudioInMuxer = false;
+
+        if (wantAudio && state.sourceType === 'file' && state.sourceFile && typeof AudioEncoder !== 'undefined' && typeof AudioData !== 'undefined') {
+          try {
+            el.exportRenderStats.textContent = 'Preparing high-quality AAC audio...';
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (AudioContextClass) {
+              const tempAudioCtx = new AudioContextClass();
+              const rawBuf = await state.sourceFile.arrayBuffer();
+              decodedAudio = await tempAudioCtx.decodeAudioData(rawBuf.slice(0));
+              await tempAudioCtx.close().catch(() => {});
+
+              if (decodedAudio && decodedAudio.length > 0) {
+                audioChannels = Math.min(2, Math.max(1, decodedAudio.numberOfChannels));
+                audioSampleRate = decodedAudio.sampleRate;
+                const audioSupport = await AudioEncoder.isConfigSupported({
+                  codec: 'mp4a.40.2',
+                  numberOfChannels: audioChannels,
+                  sampleRate: audioSampleRate,
+                  bitrate: 192000,
+                });
+                if (audioSupport && audioSupport.supported) {
+                  includeAudioInMuxer = true;
+                }
+              }
+            }
+          } catch (audioErr) {
+            console.warn('Skipping audio track in WebCodecs MP4:', audioErr);
+            decodedAudio = null;
+            includeAudioInMuxer = false;
+          }
+        }
+
+        // Precompute exact source timestamp for every constant-rate output frame
+        const frameSourceTimes = [];
+        let simTime = state.trimStart;
+        const maxSafetyFrames = Math.ceil(clipDuration * fps * 4.5) + fps;
+        while (simTime < state.trimEnd - 0.0005 && frameSourceTimes.length < maxSafetyFrames) {
+          frameSourceTimes.push(simTime);
+          let stepSpeed = state.speed || 1.0;
+          if (state.scenes.length > 0) {
+            const sc = evaluateSceneAt(simTime);
+            if (sc && sc.speed) stepSpeed = sc.speed;
+          }
+          simTime += (1 / fps) * clamp(stepSpeed, 0.25, 4.0);
+        }
+        if (frameSourceTimes.length === 0) frameSourceTimes.push(state.trimStart);
+
+        const muxer = new Mp4Muxer.Muxer({
+          target: new Mp4Muxer.ArrayBufferTarget(),
+          video: { codec: 'avc', width: outW, height: outH },
+          audio: includeAudioInMuxer
+            ? { codec: 'aac', numberOfChannels: audioChannels, sampleRate: audioSampleRate }
+            : undefined,
+          fastStart: 'in-memory',
+          firstTimestampBehavior: 'offset',
+        });
+
+        let encoderError = null;
+        const videoEncoder = new VideoEncoder({
+          output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+          error: (err) => { encoderError = err; },
+        });
+        videoEncoder.configure(videoConfig);
+
+        const mbps = (videoBitrate / 1000000).toFixed(1);
+        const totalFrames = frameSourceTimes.length;
+        const frameDurationUs = Math.round(1_000_000 / fps);
+        const startWallTime = performance.now();
+
+        el.exportStatusText.textContent = `Rendering ${resLabel} (${outW}×${outH}) MP4 @ ${fps} FPS`;
+        el.exportRenderStats.textContent = `${mbps} Mbps • Frame-Exact H.264 • ${includeAudioInMuxer ? 'AAC Audio' : 'Video Only'}`;
+
+        let renderedFrames = 0;
+
+        for (let i = 0; i < totalFrames; i++) {
+          if (state.exportCancelled || encoderError) break;
+
+          const srcTime = frameSourceTimes[i];
+          if (state.sourceType === 'file') {
+            await seekVideoAndWait(el.sourceVideo, srcTime, 1500);
+          } else {
+            renderDemoFrame(srcTime);
+          }
+
+          if (state.scenes.length > 0) {
+            applySceneFramingAt(srcTime, false);
+          }
+
+          renderCompositeFrame(exportCtx, outW, outH);
+
+          // Wait if encoder queue is full to avoid memory spikes or browser hangs
+          while (videoEncoder.encodeQueueSize > 8 && !state.exportCancelled && !encoderError) {
+            await new Promise((r) => setTimeout(r, 4));
+          }
+          if (state.exportCancelled || encoderError) break;
+
+          const videoFrame = new VideoFrame(exportCanvas, {
+            timestamp: Math.round((i * 1_000_000) / fps),
+            duration: frameDurationUs,
+          });
+          videoEncoder.encode(videoFrame, { keyFrame: i % (fps * 2) === 0 });
+          videoFrame.close();
+
+          renderedFrames++;
+
+          if (i % 3 === 0 || i === totalFrames - 1) {
+            const progress = clamp((i + 1) / totalFrames, 0, 1);
+            const pct = Math.round(progress * (includeAudioInMuxer ? 92 : 98));
+            el.exportProgressBar.style.width = `${pct}%`;
+            el.exportPercentText.textContent = `${pct}%`;
+            el.exportTimeRemaining.textContent = `${((i + 1) / fps).toFixed(1)}s / ${(totalFrames / fps).toFixed(1)}s`;
+
+            const wallSec = Math.max(0.1, (performance.now() - startWallTime) / 1000);
+            const renderFps = Math.round(renderedFrames / wallSec);
+            el.exportRenderStats.textContent = `Frame ${renderedFrames}/${totalFrames} • ${renderFps} fps • ${mbps} Mbps H.264`;
+            await new Promise((r) => setTimeout(r, 0));
+          }
+        }
+
+        if (encoderError) throw encoderError;
+        if (state.exportCancelled) {
+          try { videoEncoder.close(); } catch (_) {}
+          return { cancelled: true };
+        }
+
+        el.exportStatusText.textContent = 'Finalizing H.264 video stream...';
+        await videoEncoder.flush();
+        videoEncoder.close();
+
+        if (includeAudioInMuxer && decodedAudio) {
+          el.exportStatusText.textContent = 'Muxing high-quality AAC audio...';
+          el.exportProgressBar.style.width = '96%';
+          el.exportPercentText.textContent = '96%';
+          await encodeTrimmedAudioTrack(muxer, decodedAudio, frameSourceTimes, fps, audioChannels, audioSampleRate);
+        }
+
+        muxer.finalize();
+        el.exportProgressBar.style.width = '100%';
+        el.exportPercentText.textContent = '100%';
+
+        const blob = new Blob([muxer.target.buffer], { type: 'video/mp4' });
+        return { blob, ext: 'mp4', renderedFrames, cancelled: false };
+      }
+
+      async function exportWithMediaRecorder({ outW, outH, resLabel, fps, videoBitrate, prefFormat, wantAudio, clipDuration, exportCanvas, exportCtx }) {
+        if (typeof MediaRecorder === 'undefined') {
+          throw new Error('MediaRecorder is not supported in this browser.');
+        }
+
+        let canvasStream = null;
+        const chunks = [];
+        const prevMuted = el.sourceVideo.muted;
+        const prevPlaybackGain = audioPlaybackGain ? audioPlaybackGain.gain.value : 1;
+
+        try {
+          if (state.sourceType === 'file') {
+            await seekVideoAndWait(el.sourceVideo, state.trimStart, 1500);
+          } else {
+            renderDemoFrame(state.trimStart);
+          }
+
+          if (state.scenes.length > 0) {
+            applySceneFramingAt(state.trimStart, false);
+          }
+          renderCompositeFrame(exportCtx, outW, outH);
+
+          // Use steady fixed-FPS stream so MediaRecorder timestamps never stall or hang
+          canvasStream = exportCanvas.captureStream(fps);
+          const tracks = [canvasStream.getVideoTracks()[0]];
+          let hasAudioTrack = false;
+
+          if (wantAudio && state.sourceType === 'file') {
+            const dest = ensureWebAudioGraph();
+            if (dest && dest.stream.getAudioTracks().length > 0) {
+              el.sourceVideo.muted = false;
+              if (audioPlaybackGain) audioPlaybackGain.gain.value = 0;
+              tracks.push(dest.stream.getAudioTracks()[0]);
+              hasAudioTrack = true;
+            }
+          } else if (state.sourceType === 'file') {
+            el.sourceVideo.muted = true;
+          }
+
+          const combinedStream = new MediaStream(tracks);
+          const { mimeType, ext } = pickSupportedMimeType(prefFormat, hasAudioTrack);
+
+          const recorderOptions = { videoBitsPerSecond: videoBitrate };
+          if (hasAudioTrack) recorderOptions.audioBitsPerSecond = 192000;
+          if (mimeType) recorderOptions.mimeType = mimeType;
+
+          const recorder = new MediaRecorder(combinedStream, recorderOptions);
+          recorder.ondataavailable = (ev) => {
+            if (ev.data && ev.data.size > 0) chunks.push(ev.data);
+          };
+
+          const recordingDone = new Promise((resolve, reject) => {
+            recorder.onstop = () => resolve();
+            recorder.onerror = (ev) => reject(ev.error || new Error('MediaRecorder error'));
+          });
+
+          // Single clean container for MP4; 250ms chunks for WebM
+          if (ext === 'mp4') {
+            recorder.start();
+          } else {
+            recorder.start(250);
+          }
+
+          const mbps = (videoBitrate / 1000000).toFixed(1);
+          el.exportStatusText.textContent = `Rendering ${resLabel} (${outW}×${outH}) ${ext.toUpperCase()} @ ${fps} FPS`;
+          el.exportRenderStats.textContent = `${mbps} Mbps • Steady ${fps} FPS • ${hasAudioTrack ? 'Audio Included' : 'Video Only'}`;
+
+          if (state.sourceType === 'file') {
+            el.sourceVideo.preservesPitch = true;
+            el.sourceVideo.webkitPreservesPitch = true;
+            await el.sourceVideo.play();
+          }
+
+          const startWallTime = performance.now();
+          let lastExportWallTime = startWallTime;
+          let demoExportTime = state.trimStart;
+          let renderedFrames = 0;
+
+          await new Promise((resolve) => {
+            let rafHandle = null;
+            let done = false;
+
+            const finishLoop = () => {
+              if (done) return;
+              done = true;
+              if (rafHandle !== null) cancelAnimationFrame(rafHandle);
+              resolve();
+            };
+
+            function drawStep(now) {
+              if (done || state.exportCancelled) {
+                finishLoop();
+                return;
+              }
+
+              const frameDt = Math.min((now - lastExportWallTime) / 1000, 0.1);
+              lastExportWallTime = now;
+
+              let elapsed = 0;
+              let currentExportTime = state.trimStart;
+              if (state.sourceType === 'demo') {
+                demoExportTime = Math.min(state.trimEnd, demoExportTime + frameDt * (state.speed || 1.0));
+                currentExportTime = demoExportTime;
+                elapsed = Math.max(0, currentExportTime - state.trimStart);
+                renderDemoFrame(currentExportTime);
+              } else {
+                currentExportTime = el.sourceVideo.currentTime;
+                elapsed = Math.max(0, currentExportTime - state.trimStart);
+              }
+
+              if (state.scenes.length > 0) {
+                applySceneFramingAt(currentExportTime, false);
+              } else if (state.sourceType === 'file') {
+                el.sourceVideo.playbackRate = clamp(state.speed || 1.0, 0.25, 4.0);
+              }
+
+              if (state.sourceType === 'demo' || el.sourceVideo.readyState >= 2) {
+                renderCompositeFrame(exportCtx, outW, outH);
+                renderedFrames++;
+              }
+
+              const progress = clamp(elapsed / clipDuration, 0, 1);
+              const pct = Math.round(progress * 100);
+              el.exportProgressBar.style.width = `${pct}%`;
+              el.exportPercentText.textContent = `${pct}%`;
+              el.exportTimeRemaining.textContent = `${Math.min(elapsed, clipDuration).toFixed(1)}s / ${clipDuration.toFixed(1)}s`;
+
+              if (renderedFrames % 12 === 0) {
+                const wallSec = Math.max(0.1, (now - startWallTime) / 1000);
+                const actualFps = Math.round(renderedFrames / wallSec);
+                el.exportRenderStats.textContent = `${renderedFrames} frames • ~${actualFps} FPS • ${mbps} Mbps`;
+              }
+
+              const finished = state.sourceType === 'demo'
+                ? currentExportTime >= state.trimEnd - 0.01
+                : (el.sourceVideo.currentTime >= state.trimEnd - 0.02 || el.sourceVideo.ended);
+
+              if (finished) {
+                finishLoop();
+                return;
+              }
+
+              rafHandle = requestAnimationFrame(drawStep);
+            }
+
+            if (state.sourceType === 'file') {
+              el.sourceVideo.addEventListener('ended', finishLoop, { once: true });
+            }
+            rafHandle = requestAnimationFrame(drawStep);
+          });
+
+          if (state.sourceType === 'file') {
+            el.sourceVideo.pause();
+          }
+          if (recorder.state !== 'inactive') {
+            recorder.stop();
+          }
+          await recordingDone;
+
+          if (state.exportCancelled) {
+            return { cancelled: true };
+          }
+
+          const blob = new Blob(chunks, { type: mimeType || (ext === 'mp4' ? 'video/mp4' : 'video/webm') });
+          return { blob, ext, renderedFrames, cancelled: false };
+        } finally {
+          if (canvasStream) canvasStream.getTracks().forEach((t) => t.stop());
+          if (state.sourceType === 'file') {
+            el.sourceVideo.pause();
+            el.sourceVideo.muted = prevMuted;
+          }
+          if (audioPlaybackGain) audioPlaybackGain.gain.value = prevPlaybackGain;
+        }
+      }
+
+      async function startExportReel() {
+        if (!state.hasSource || state.isExporting) return;
+
+        const clipDuration = Math.max(0.2, state.trimEnd - state.trimStart);
+        const [outW, outH] = el.resolutionSelect.value.split('x').map(Number);
+        const resLabel = outW >= 1080 ? '1080p' : '720p';
+        const fps = Number(el.fpsSelect.value) || 30;
+        const quality = el.qualitySelect.value || 'high';
+        const prefFormat = el.formatSelect.value || 'mp4';
+        const wantAudio = el.includeAudioCheckbox.checked && state.sourceType === 'file';
+        const videoBitrate = computeExportBitrate(outW, fps, quality);
+
+        // Save current framing state so export never alters the user's editor view
+        const savedFraming = {
+          mode: state.mode,
+          zoom: state.zoom,
+          panX: state.panX,
+          panY: state.panY,
+          speed: state.speed,
+        };
+
+        // Pause preview playback cleanly
+        state.isPlaying = false;
+        updatePlayPauseUI();
+        if (state.sourceType === 'file') {
+          el.sourceVideo.pause();
+        }
+
+        state.isExporting = true;
+        state.exportCancelled = false;
+        el.btnExportReel.disabled = true;
+        el.exportResultBox.classList.add('hidden');
+        el.exportProgressBox.classList.remove('hidden');
+        el.exportProgressBar.style.width = '0%';
+        el.exportPercentText.textContent = '0%';
+        el.exportStatusText.textContent = `Preparing ${resLabel} render...`;
+        el.exportRenderStats.textContent = 'Initializing encoder...';
+
+        const exportCanvas = document.createElement('canvas');
+        exportCanvas.width = outW;
+        exportCanvas.height = outH;
+        const exportCtx = exportCanvas.getContext('2d', { alpha: false });
+
+        try {
+          let result = null;
+
+          // Primary: Deterministic Frame-Exact Hardware H.264 MP4 via WebCodecs + mp4-muxer
+          if (prefFormat === 'mp4' && supportsWebCodecsMP4()) {
+            try {
+              result = await exportWithWebCodecsMP4({
+                outW, outH, resLabel, fps, videoBitrate, wantAudio, clipDuration, exportCanvas, exportCtx,
+              });
+            } catch (wcErr) {
+              console.warn('WebCodecs MP4 failed, falling back to MediaRecorder:', wcErr);
+              result = null;
+            }
+          }
+
+          // Fallback: Fixed Steady-FPS MediaRecorder Engine (WebM or non-WebCodecs browsers)
+          if (!result && !state.exportCancelled) {
+            result = await exportWithMediaRecorder({
+              outW, outH, resLabel, fps, videoBitrate, prefFormat, wantAudio, clipDuration, exportCanvas, exportCtx,
+            });
+          }
+
+          if (!result || result.cancelled || state.exportCancelled) {
+            showToast('Export cancelled.', 'info');
+            return;
+          }
+
+          if (state.exportedUrl) URL.revokeObjectURL(state.exportedUrl);
+          state.exportedUrl = URL.createObjectURL(result.blob);
+
+          const sizeMB = (result.blob.size / (1024 * 1024)).toFixed(2);
+          const safeBase = state.fileName.replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0, 40) || 'reelcraft';
+          el.btnDownloadReel.href = state.exportedUrl;
+          el.btnDownloadReel.download = `${safeBase}-reel-${resLabel}.${result.ext}`;
+          el.exportResultMeta.textContent = `${resLabel} (${outW}×${outH}) • ${result.ext.toUpperCase()} • ${sizeMB} MB • ${result.renderedFrames} frames`;
+          el.exportResultBox.classList.remove('hidden');
+          showToast(`Export complete (${sizeMB} MB ${result.ext.toUpperCase()})!`, 'success');
+        } catch (err) {
+          console.error('Export error:', err);
+          showToast(`Export failed: ${err.message || 'Unsupported codec'}`, 'error');
+        } finally {
+          state.mode = savedFraming.mode;
+          state.zoom = savedFraming.zoom;
+          state.panX = savedFraming.panX;
+          state.panY = savedFraming.panY;
+          state.speed = savedFraming.speed;
+          if (state.sourceType === 'file') {
+            el.sourceVideo.pause();
+            el.sourceVideo.currentTime = state.currentTime;
+          }
+          syncFramingControlsUI();
+          state.isExporting = false;
+          el.btnExportReel.disabled = false;
+          el.exportProgressBox.classList.add('hidden');
+        }
+      }
+
+      // =======================================================================
+      // 9. EVENT LISTENERS
+      // =======================================================================
+
+      // Upload & Demo Triggers
+      const openPicker = () => el.fileInput.click();
+      el.btnSelectFile.addEventListener('click', (e) => { e.stopPropagation(); openPicker(); });
+      el.btnHeaderUpload.addEventListener('click', openPicker);
+      el.dropZone.addEventListener('click', openPicker);
+      el.btnTryDemo.addEventListener('click', loadDemoClip);
+      el.btnStartDemoHero.addEventListener('click', (e) => { e.stopPropagation(); loadDemoClip(); });
+
+      el.fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          loadUserVideoFile(e.target.files[0]);
+          el.fileInput.value = '';
+        }
+      });
+
+      el.dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        el.dropZone.classList.add('border-purple-500', 'bg-purple-500/10');
+      });
+      el.dropZone.addEventListener('dragleave', () => {
+        el.dropZone.classList.remove('border-purple-500', 'bg-purple-500/10');
+      });
+      el.dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        el.dropZone.classList.remove('border-purple-500', 'bg-purple-500/10');
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          loadUserVideoFile(e.dataTransfer.files[0]);
+        }
+      });
+
+      // Studio Tabs
+      document.querySelectorAll('.tab-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const target = btn.dataset.tab;
+          document.querySelectorAll('.tab-btn').forEach((b) => {
+            const active = b.dataset.tab === target;
+            b.className = active
+              ? 'tab-btn py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition bg-surface-800 text-white shadow-sm'
+              : 'tab-btn py-2.5 rounded-xl text-xs sm:text-sm font-medium transition text-zinc-400 hover:text-zinc-200';
+          });
+          document.querySelectorAll('.tab-panel').forEach((panel) => {
+            panel.classList.toggle('hidden', panel.id !== `tab-${target}`);
+          });
+          if (target === 'export') updateFormatSupportHint();
+        });
+      });
+
+      // Conversion Mode Buttons
+      document.querySelectorAll('.mode-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.mode = btn.dataset.mode;
+          syncFramingControlsUI();
+          autoUpdateActiveSceneIfParked();
+          pushHistory();
+        });
+      });
+
+      // Layout & Framing Sliders
+      el.zoomSlider.addEventListener('input', (e) => {
+        state.zoom = Number(e.target.value) / 100;
+        el.zoomValue.textContent = `${e.target.value}%`;
+        autoUpdateActiveSceneIfParked();
+        updateLiveHud();
+      });
+      el.zoomSlider.addEventListener('change', pushHistory);
+
+      el.panXSlider.addEventListener('input', (e) => {
+        state.panX = Number(e.target.value);
+        el.panXValue.textContent = `${Math.round(state.panX)}%`;
+        autoUpdateActiveSceneIfParked();
+      });
+      el.panXSlider.addEventListener('change', pushHistory);
+
+      el.panYSlider.addEventListener('input', (e) => {
+        state.panY = Number(e.target.value);
+        el.panYValue.textContent = `${Math.round(state.panY)}%`;
+        autoUpdateActiveSceneIfParked();
+      });
+      el.panYSlider.addEventListener('change', pushHistory);
+
+      el.blurStrengthSlider.addEventListener('input', (e) => {
+        state.blurStrength = Number(e.target.value);
+        el.blurStrengthValue.textContent = `${state.blurStrength}px`;
+      });
+
+      el.cornerRadiusBlurSlider.addEventListener('input', (e) => {
+        state.cornerRadius = Number(e.target.value);
+        el.cornerRadiusBlurValue.textContent = `${state.cornerRadius}px`;
+      });
+
+      el.framePaddingSlider.addEventListener('input', (e) => {
+        state.framePadding = Number(e.target.value);
+        el.framePaddingValue.textContent = `${state.framePadding}px`;
+      });
+
+      document.querySelectorAll('.bg-preset-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.bgPreset = btn.dataset.bg;
+          document.querySelectorAll('.bg-preset-btn').forEach((b) => {
+            b.classList.toggle('ring-2', b === btn);
+            b.classList.toggle('ring-white', b === btn);
+            b.classList.toggle('ring-1', b !== btn);
+            b.classList.toggle('ring-zinc-700', b !== btn);
+          });
+        });
+      });
+
+      // Grid, Reset View & Safe Zones
+      el.btnGridToggle.addEventListener('click', () => {
+        state.showGrid = !state.showGrid;
+        el.gridOverlay.classList.toggle('hidden', !state.showGrid);
+        el.gridDot.className = state.showGrid
+          ? 'w-2 h-2 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.9)]'
+          : 'w-2 h-2 rounded-full bg-zinc-500';
+      });
+
+      el.btnResetFraming.addEventListener('click', () => {
+        state.zoom = 1.0;
+        state.panX = 0;
+        state.panY = 0;
+        state.speed = 1.0;
+        if (state.sourceType === 'file') {
+          el.sourceVideo.playbackRate = 1.0;
+        }
+        syncFramingControlsUI();
+        autoUpdateActiveSceneIfParked();
+        pushHistory();
+        showToast('Reset zoom, pan & speed.', 'info');
+      });
+
+      el.btnSafeZone.addEventListener('click', () => {
+        state.showSafeZones = !state.showSafeZones;
+        el.safeZoneOverlay.classList.toggle('hidden', !state.showSafeZones);
+        el.safeZoneDot.className = state.showSafeZones
+          ? 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]'
+          : 'w-2 h-2 rounded-full bg-zinc-500';
+      });
+
+      // Direct Canvas Drag-to-Pan (1:1 Pointer Tracking) & Wheel-to-Zoom
+      let activeDragPointerId = null;
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let startPanX = 0;
+      let startPanY = 0;
+      let shownVerticalPanHint = false;
+
+      el.previewCanvas.addEventListener('pointerdown', (e) => {
+        if (!state.hasSource || (e.pointerType === 'mouse' && e.button !== 0)) return;
+        e.preventDefault();
+        state.isDraggingCanvas = true;
+        activeDragPointerId = e.pointerId;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        startPanX = state.panX;
+        startPanY = state.panY;
+        el.dragHint.style.opacity = '0';
+        try {
+          el.previewCanvas.setPointerCapture(e.pointerId);
+        } catch (_) {}
+      });
+
+      el.previewCanvas.addEventListener('pointermove', (e) => {
+        if (!state.isDraggingCanvas || e.pointerId !== activeDragPointerId) return;
+        const rect = el.previewCanvas.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+
+        const outW = el.previewCanvas.width;
+        const outH = el.previewCanvas.height;
+        const { rangeX, rangeY } = getPanRanges(outW, outH);
+
+        const deltaCanvasX = (e.clientX - dragStartX) * (outW / rect.width);
+        const deltaCanvasY = (e.clientY - dragStartY) * (outH / rect.height);
+
+        if (rangeX > 0.5) {
+          const deltaPanX = (deltaCanvasX / rangeX) * 100;
+          state.panX = Number(clamp(startPanX + deltaPanX, -100, 100).toFixed(1));
+          el.panXSlider.value = state.panX;
+          el.panXValue.textContent = `${Math.round(state.panX)}%`;
+        }
+
+        if (rangeY > 0.5) {
+          const deltaPanY = (deltaCanvasY / rangeY) * 100;
+          state.panY = Number(clamp(startPanY + deltaPanY, -100, 100).toFixed(1));
+          el.panYSlider.value = state.panY;
+          el.panYValue.textContent = `${Math.round(state.panY)}%`;
+        } else if (
+          state.mode === 'crop' &&
+          !shownVerticalPanHint &&
+          Math.abs(e.clientY - dragStartY) > 36 &&
+          Math.abs(e.clientX - dragStartX) < 18
+        ) {
+          shownVerticalPanHint = true;
+          showToast('Zoom in (>100%) to pan vertically in Smart Crop mode.', 'info');
+        }
+
+        autoUpdateActiveSceneIfParked();
+      });
+
+      function endCanvasDrag(e) {
+        if (!state.isDraggingCanvas || (e && e.pointerId !== activeDragPointerId)) return;
+        state.isDraggingCanvas = false;
+        if (activeDragPointerId !== null) {
+          try {
+            el.previewCanvas.releasePointerCapture(activeDragPointerId);
+          } catch (_) {}
+          activeDragPointerId = null;
+        }
+        autoUpdateActiveSceneIfParked();
+        pushHistory();
+      }
+
+      el.previewCanvas.addEventListener('pointerup', endCanvasDrag);
+      el.previewCanvas.addEventListener('pointercancel', endCanvasDrag);
+
+      el.previewCanvas.addEventListener('wheel', (e) => {
+        if (!state.hasSource) return;
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 0.06 : -0.06;
+        state.zoom = Number(clamp(state.zoom + delta, 1.0, 2.5).toFixed(2));
+        const pct = Math.round(state.zoom * 100);
+        el.zoomSlider.value = pct;
+        el.zoomValue.textContent = `${pct}%`;
+        autoUpdateActiveSceneIfParked();
+        updateLiveHud();
+      }, { passive: false });
+
+      // Play / Pause & Mute
+      el.btnPlayPause.addEventListener('click', () => {
+        if (!state.hasSource) return;
+        state.isPlaying = !state.isPlaying;
+        if (state.sourceType === 'file') {
+          if (state.isPlaying) {
+            if (state.currentTime < state.trimStart || state.currentTime >= state.trimEnd - 0.05) {
+              el.sourceVideo.currentTime = state.trimStart;
+              state.currentTime = state.trimStart;
+            }
+            el.sourceVideo.playbackRate = clamp(state.speed, 0.25, 4.0);
+            el.sourceVideo.play().catch(() => {});
+          } else {
+            el.sourceVideo.pause();
+          }
+        } else if (state.isPlaying && (state.currentTime < state.trimStart || state.currentTime >= state.trimEnd)) {
+          state.currentTime = state.trimStart;
+        }
+        updatePlayPauseUI();
+      });
+
+      el.btnMute.addEventListener('click', () => {
+        state.isMuted = !state.isMuted;
+        el.sourceVideo.muted = state.isMuted;
+        el.iconVolOn.classList.toggle('hidden', state.isMuted);
+        el.iconVolOff.classList.toggle('hidden', !state.isMuted);
+      });
+
+      // Fallback Seek Slider
+      el.seekSlider.addEventListener('input', (e) => {
+        if (!state.hasSource) return;
+        state.currentTime = clamp(Number(e.target.value), 0, state.duration);
+        if (state.sourceType === 'file') el.sourceVideo.currentTime = state.currentTime;
+        if (state.scenes.length > 0) applySceneFramingAt(state.currentTime, true);
+        updateTimelineUI();
+        renderScenesUI();
+      });
+
+      // Interactive Visual Timeline (Scrub Playhead & Drag Trim In/Out Handles)
+      let timelineDragMode = null; // 'scrub' | 'trimLeft' | 'trimRight'
+
+      function clientXToTime(clientX) {
+        const rect = el.visualTimeline.getBoundingClientRect();
+        const pct = clamp((clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+        return pct * state.duration;
+      }
+
+      function applyTimelineDrag(clientX) {
+        if (!state.hasSource || !timelineDragMode) return;
+        const t = clientXToTime(clientX);
+        if (timelineDragMode === 'scrub') {
+          state.currentTime = clamp(t, 0, state.duration);
+          if (state.sourceType === 'file') el.sourceVideo.currentTime = state.currentTime;
+          if (state.scenes.length > 0) applySceneFramingAt(state.currentTime, true);
+          updateTimelineUI();
+          renderScenesUI();
+        } else if (timelineDragMode === 'trimLeft') {
+          state.trimStart = clamp(t, 0, Math.max(0, state.trimEnd - 0.5));
+          el.trimStartSlider.value = state.trimStart;
+          el.trimStartLabel.textContent = formatTime(state.trimStart);
+          if (state.currentTime < state.trimStart) {
+            state.currentTime = state.trimStart;
+            if (state.sourceType === 'file') el.sourceVideo.currentTime = state.trimStart;
+          }
+          updateTimelineUI();
+        } else if (timelineDragMode === 'trimRight') {
+          state.trimEnd = clamp(t, Math.min(state.duration, state.trimStart + 0.5), state.duration);
+          el.trimEndSlider.value = state.trimEnd;
+          el.trimEndLabel.textContent = formatTime(state.trimEnd);
+          if (state.currentTime > state.trimEnd) {
+            state.currentTime = state.trimEnd;
+            if (state.sourceType === 'file') el.sourceVideo.currentTime = state.trimEnd;
+          }
+          updateTimelineUI();
+        }
+      }
+
+      function startTimelineDrag(mode, clientX) {
+        if (!state.hasSource) return;
+        timelineDragMode = mode;
+        applyTimelineDrag(clientX);
+      }
+
+      function endTimelineDrag() {
+        if (timelineDragMode === 'trimLeft' || timelineDragMode === 'trimRight') {
+          pushHistory();
+        }
+        timelineDragMode = null;
+      }
+
+      el.trimHandleLeft.addEventListener('mousedown', (e) => { e.stopPropagation(); startTimelineDrag('trimLeft', e.clientX); });
+      el.trimHandleRight.addEventListener('mousedown', (e) => { e.stopPropagation(); startTimelineDrag('trimRight', e.clientX); });
+      el.visualTimeline.addEventListener('mousedown', (e) => startTimelineDrag('scrub', e.clientX));
+      window.addEventListener('mousemove', (e) => { if (timelineDragMode) applyTimelineDrag(e.clientX); });
+      window.addEventListener('mouseup', endTimelineDrag);
+
+      el.trimHandleLeft.addEventListener('touchstart', (e) => { e.stopPropagation(); if (e.touches[0]) startTimelineDrag('trimLeft', e.touches[0].clientX); }, { passive: true });
+      el.trimHandleRight.addEventListener('touchstart', (e) => { e.stopPropagation(); if (e.touches[0]) startTimelineDrag('trimRight', e.touches[0].clientX); }, { passive: true });
+      el.visualTimeline.addEventListener('touchstart', (e) => { if (e.touches[0]) startTimelineDrag('scrub', e.touches[0].clientX); }, { passive: true });
+      window.addEventListener('touchmove', (e) => {
+        if (timelineDragMode && e.touches[0]) {
+          e.preventDefault();
+          applyTimelineDrag(e.touches[0].clientX);
+        }
+      }, { passive: false });
+      window.addEventListener('touchend', endTimelineDrag);
+
+      // Precision Frame-Step, Set In/Out & Undo/Redo
+      function stepTime(delta) {
+        if (!state.hasSource) return;
+        state.currentTime = clamp(state.currentTime + delta, 0, state.duration);
+        if (state.sourceType === 'file') el.sourceVideo.currentTime = state.currentTime;
+        if (state.scenes.length > 0) applySceneFramingAt(state.currentTime, true);
+        updateTimelineUI();
+        renderScenesUI();
+      }
+
+      el.btnStepBack.addEventListener('click', () => stepTime(-0.1));
+      el.btnStepForward.addEventListener('click', () => stepTime(0.1));
+
+      el.btnSetTrimIn.addEventListener('click', () => {
+        if (!state.hasSource) return;
+        state.trimStart = Math.min(state.currentTime, Math.max(0, state.trimEnd - 0.5));
+        el.trimStartSlider.value = state.trimStart;
+        el.trimStartLabel.textContent = formatTime(state.trimStart);
+        updateTimelineUI();
+        pushHistory();
+        showToast(`Trim Start set to ${formatTime(state.trimStart)}`, 'info');
+      });
+
+      el.btnSetTrimOut.addEventListener('click', () => {
+        if (!state.hasSource) return;
+        state.trimEnd = Math.max(state.currentTime, Math.min(state.duration, state.trimStart + 0.5));
+        el.trimEndSlider.value = state.trimEnd;
+        el.trimEndLabel.textContent = formatTime(state.trimEnd);
+        updateTimelineUI();
+        pushHistory();
+        showToast(`Trim End set to ${formatTime(state.trimEnd)}`, 'info');
+      });
+
+      el.btnUndo.addEventListener('click', () => {
+        if (state.historyIndex > 0) {
+          state.historyIndex--;
+          restoreHistorySnapshot(state.history[state.historyIndex]);
+          showToast('Undid last edit.', 'info');
+        }
+      });
+
+      el.btnRedo.addEventListener('click', () => {
+        if (state.historyIndex < state.history.length - 1) {
+          state.historyIndex++;
+          restoreHistorySnapshot(state.history[state.historyIndex]);
+          showToast('Redid edit.', 'info');
+        }
+      });
+
+      // Timeline Scene Buttons & Speed Selector
+      el.btnAddScene.addEventListener('click', addOrUpdateSceneAtCurrentTime);
+      el.btnQuickZoomIn.addEventListener('click', () => addQuickZoomScene('in'));
+      el.btnQuickZoomOut.addEventListener('click', () => addQuickZoomScene('out'));
+      el.btnQuickFast.addEventListener('click', addQuickFastScene);
+
+      el.speedSelect.addEventListener('change', (e) => {
+        state.speed = Number(e.target.value) || 1.0;
+        if (state.sourceType === 'file') {
+          el.sourceVideo.playbackRate = clamp(state.speed, 0.25, 4.0);
+        }
+        autoUpdateActiveSceneIfParked();
+        updateLiveHud();
+        pushHistory();
+        showToast(`Playback speed set to ${state.speed}×`, 'info');
+      });
+
+      el.btnToggleSceneTransition.addEventListener('click', () => {
+        state.sceneTransition = state.sceneTransition === 'smooth' ? 'cut' : 'smooth';
+        el.sceneTransitionLabel.textContent = state.sceneTransition === 'smooth' ? 'Smooth Motion' : 'Instant Cut';
+        pushHistory();
+        showToast(`Scene transition: ${el.sceneTransitionLabel.textContent}`, 'info');
+      });
+
+      el.btnClearScenes.addEventListener('click', () => {
+        state.scenes = [];
+        pushHistory();
+        renderScenesUI();
+        showToast('Cleared all timeline scenes.', 'info');
+      });
+
+      // Trim Sliders & Presets
+      el.trimStartSlider.addEventListener('input', (e) => {
+        state.trimStart = clamp(Number(e.target.value), 0, Math.max(0, state.trimEnd - 0.5));
+        el.trimStartSlider.value = state.trimStart;
+        el.trimStartLabel.textContent = formatTime(state.trimStart);
+        if (state.currentTime < state.trimStart) {
+          state.currentTime = state.trimStart;
+          if (state.sourceType === 'file') el.sourceVideo.currentTime = state.trimStart;
+        }
+        updateTimelineUI();
+      });
+      el.trimStartSlider.addEventListener('change', pushHistory);
+
+      el.trimEndSlider.addEventListener('input', (e) => {
+        state.trimEnd = clamp(Number(e.target.value), Math.min(state.duration, state.trimStart + 0.5), state.duration);
+        el.trimEndSlider.value = state.trimEnd;
+        el.trimEndLabel.textContent = formatTime(state.trimEnd);
+        if (state.currentTime > state.trimEnd) {
+          state.currentTime = state.trimEnd;
+          if (state.sourceType === 'file') el.sourceVideo.currentTime = state.trimEnd;
+        }
+        updateTimelineUI();
+      });
+      el.trimEndSlider.addEventListener('change', pushHistory);
+
+      document.querySelectorAll('.trim-preset-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (!state.hasSource) return;
+          const val = btn.dataset.presetSec;
+          if (val === 'full') {
+            state.trimStart = 0;
+            state.trimEnd = state.duration;
+          } else {
+            const sec = Number(val);
+            state.trimEnd = Math.min(state.duration, state.trimStart + sec);
+          }
+          el.trimStartSlider.value = state.trimStart;
+          el.trimEndSlider.value = state.trimEnd;
+          el.trimStartLabel.textContent = formatTime(state.trimStart);
+          el.trimEndLabel.textContent = formatTime(state.trimEnd);
+          updateTimelineUI();
+          pushHistory();
+        });
+      });
+
+      // Captions & Color Controls
+      el.captionInput.addEventListener('input', (e) => {
+        state.captionText = e.target.value;
+      });
+
+      document.querySelectorAll('.capstyle-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.captionStyle = btn.dataset.capstyle;
+          document.querySelectorAll('.capstyle-btn').forEach((b) => {
+            const active = b === btn;
+            b.className = active
+              ? 'capstyle-btn py-2 px-2.5 rounded-xl text-xs font-semibold border border-purple-500 bg-purple-500/15 text-white'
+              : 'capstyle-btn py-2 px-2.5 rounded-xl text-xs font-medium border border-zinc-800 bg-surface-850 text-zinc-300';
+          });
+        });
+      });
+
+      document.querySelectorAll('.cappos-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.captionPos = btn.dataset.cappos;
+          document.querySelectorAll('.cappos-btn').forEach((b) => {
+            const active = b === btn;
+            b.className = active
+              ? 'cappos-btn py-1.5 rounded-lg text-xs font-semibold border border-purple-500 bg-purple-500/15 text-white'
+              : 'cappos-btn py-1.5 rounded-lg text-xs font-medium border border-zinc-800 bg-surface-850 text-zinc-300';
+          });
+        });
+      });
+
+      el.captionSizeSlider.addEventListener('input', (e) => {
+        state.captionSize = Number(e.target.value);
+        el.captionSizeValue.textContent = `${state.captionSize}px`;
+      });
+
+      function syncColorUI() {
+        el.brightnessSlider.value = state.brightness;
+        el.brightnessValue.textContent = `${state.brightness}%`;
+        el.contrastSlider.value = state.contrast;
+        el.contrastValue.textContent = `${state.contrast}%`;
+        el.saturationSlider.value = state.saturation;
+        el.saturationValue.textContent = `${state.saturation}%`;
+      }
+
+      document.querySelectorAll('.filter-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const key = btn.dataset.filter;
+          const preset = FILTER_PRESETS[key] || FILTER_PRESETS.none;
+          state.filterPreset = key;
+          state.brightness = preset.brightness;
+          state.contrast = preset.contrast;
+          state.saturation = preset.saturation;
+          syncColorUI();
+          document.querySelectorAll('.filter-btn').forEach((b) => {
+            const active = b === btn;
+            b.className = active
+              ? 'filter-btn py-2 rounded-xl text-xs font-semibold border border-purple-500 bg-purple-500/15 text-white'
+              : 'filter-btn py-2 rounded-xl text-xs font-medium border border-zinc-800 bg-surface-850 text-zinc-300';
+          });
+        });
+      });
+
+      el.btnResetColor.addEventListener('click', () => {
+        state.filterPreset = 'none';
+        state.brightness = 100;
+        state.contrast = 100;
+        state.saturation = 100;
+        syncColorUI();
+        document.querySelectorAll('.filter-btn').forEach((b) => {
+          const active = b.dataset.filter === 'none';
+          b.className = active
+            ? 'filter-btn py-2 rounded-xl text-xs font-semibold border border-purple-500 bg-purple-500/15 text-white'
+            : 'filter-btn py-2 rounded-xl text-xs font-medium border border-zinc-800 bg-surface-850 text-zinc-300';
+        });
+      });
+
+      el.brightnessSlider.addEventListener('input', (e) => {
+        state.brightness = Number(e.target.value);
+        el.brightnessValue.textContent = `${state.brightness}%`;
+      });
+      el.contrastSlider.addEventListener('input', (e) => {
+        state.contrast = Number(e.target.value);
+        el.contrastValue.textContent = `${state.contrast}%`;
+      });
+      el.saturationSlider.addEventListener('input', (e) => {
+        state.saturation = Number(e.target.value);
+        el.saturationValue.textContent = `${state.saturation}%`;
+      });
+
+      // Export Controls
+      el.formatSelect.addEventListener('change', updateFormatSupportHint);
+      el.includeAudioCheckbox.addEventListener('change', updateFormatSupportHint);
+      el.btnExportReel.addEventListener('click', startExportReel);
+      el.btnCancelExport.addEventListener('click', () => {
+        state.exportCancelled = true;
+      });
+
+      // Keyboard Shortcuts: Space (Play/Pause), Arrows (-0.1s/+0.1s), I/O (Trim In/Out), Ctrl+Z/Y (Undo/Redo)
+      window.addEventListener('keydown', (e) => {
+        if (!state.hasSource || state.isExporting) return;
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+        if (e.code === 'Space') {
+          e.preventDefault();
+          el.btnPlayPause.click();
+        } else if (e.code === 'ArrowLeft') {
+          e.preventDefault();
+          stepTime(e.shiftKey ? -1.0 : -0.1);
+        } else if (e.code === 'ArrowRight') {
+          e.preventDefault();
+          stepTime(e.shiftKey ? 1.0 : 0.1);
+        } else if (e.key === 'i' || e.key === 'I') {
+          e.preventDefault();
+          el.btnSetTrimIn.click();
+        } else if (e.key === 'o' || e.key === 'O') {
+          e.preventDefault();
+          el.btnSetTrimOut.click();
+        } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+          e.preventDefault();
+          if (e.shiftKey) el.btnRedo.click();
+          else el.btnUndo.click();
+        } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+          e.preventDefault();
+          el.btnRedo.click();
+        }
+      });
+
+      // Initialize format hint & start Master Animation Loop
+      updateFormatSupportHint();
+      requestAnimationFrame(mainLoop);
+    })();
+  </script>
+</body>
+</html>
